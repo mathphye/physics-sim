@@ -224,7 +224,7 @@ main {
 }
 
 .hidden {
-    display: none;
+    display: none !important;
 }
 
 button#reset-btn, button#pause-btn, button#apply-force {
@@ -348,4 +348,55 @@ footer p {
 footer p span {
     color: var(--accent-color);
     font-weight: 600;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.3s ease;
+}
+
+footer p span:hover {
+    background: var(--accent-glow);
+    text-shadow: 0 0 10px var(--accent-color);
+}
+
+#flappy-overlay {
+    position: absolute;
+    top: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 1rem 3rem;
+    z-index: 100;
+    text-align: center;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-width: 250px;
+}
+
+.score-box {
+    display: flex;
+    flex-direction: column;
+}
+
+.score-label {
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+#score-val {
+    font-size: 3rem;
+    font-weight: 600;
+    color: var(--accent-color);
+    text-shadow: 0 0 30px var(--accent-glow);
+}
+
+.game-over {
+    color: #ef4444;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    animation: pulse 1.5s infinite;
 }

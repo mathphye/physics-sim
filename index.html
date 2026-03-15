@@ -61,7 +61,7 @@
                 </div>
 
                 <div class="btn-group">
-                    <button id="pause-btn">Pause & Analyze</button>
+                    <button id="pause-btn">Pause</button>
                     <button id="reset-btn">Reset</button>
                 </div>
             </div>
@@ -94,8 +94,16 @@
         </main>
 
         <footer>
-            <p>mathphye + vibe code <span>ai</span></p>
+            <p>mathphye + vibe code <span id="easter-egg-btn">ai</span></p>
         </footer>
+        
+        <div id="flappy-overlay" class="glass hidden">
+            <div class="score-box">
+                <span class="score-label">Points</span>
+                <span id="score-val">0</span>
+            </div>
+            <p class="game-over hidden">Game Over! Press Reset</p>
+        </div>
     </div>
     <script src="app.js"></script>
 </body>

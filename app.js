@@ -177,6 +177,13 @@ class Simulation {
         this.accumulator = 0; // Fixes physics/trail sampling
         this.fixedDeltaTime = 1 / 60; // 60Hz stable sampling
         this.mouseTargetY = 0; // Virtual spring target
+        
+        // Flappy Mode State
+        this.isFlappy = false;
+        this.obstacles = [];
+        this.score = 0;
+        this.isGameOver = false;
+        this.spawnTimer = 0;
 
         this.init();
         this.animate();
@@ -291,7 +298,7 @@ class Simulation {
 
         document.getElementById('pause-btn').addEventListener('click', (e) => {
             this.isPaused = !this.isPaused;
-            e.target.innerText = this.isPaused ? "Resume" : "Pause & Analyze";
+            e.target.innerText = this.isPaused ? "Resume" : "Pause";
             e.target.classList.toggle('active', this.isPaused);
             document.getElementById('formula-overlay').classList.toggle('hidden', !this.isPaused);
             if (this.isPaused) this.updateFormula();
@@ -299,10 +306,23 @@ class Simulation {
 
         document.getElementById('reset-btn').addEventListener('click', () => {
             this.isPaused = false;
-            document.getElementById('pause-btn').innerText = "Pause & Analyze";
+            document.getElementById('pause-btn').innerText = "Pause";
             document.getElementById('pause-btn').classList.remove('active');
             document.getElementById('formula-overlay').classList.add('hidden');
+            
+            if (this.isFlappy) {
+                this.isGameOver = false;
+                this.score = 0;
+                this.obstacles = [];
+                document.getElementById('score-val').innerText = "0";
+                document.querySelector('.game-over').classList.add('hidden');
+            }
             this.reset();
+        });
+
+        // Easter Egg: Flappy Mode
+        document.getElementById('easter-egg-btn').addEventListener('click', () => {
+            this.toggleFlappy();
         });
 
         // Initialize display values from DOM
@@ -311,7 +331,13 @@ class Simulation {
         updateVal('time-scale', document.getElementById('time-scale')?.value);
         updateVal('vy', document.getElementById('vel-y')?.value);
 
-        this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
+        this.canvas.addEventListener('mousedown', (e) => {
+            if (this.isFlappy && !this.isGameOver) {
+                this.particle.vy = 8; // Flappy Jump
+                return;
+            }
+            this.handleMouseDown(e);
+        });
         this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
         this.canvas.addEventListener('mouseup', () => this.isDragging = false);
     }
@@ -391,7 +417,9 @@ class Simulation {
         
         this.ctx.restore();
         
-        this.drawFloor(centerY, globalTime);
+        if (!this.isFlappy) {
+            this.drawFloor(centerY, globalTime);
+        }
     }
 
     drawFloor(centerY, globalTime) {
@@ -522,6 +550,66 @@ class Simulation {
         this.ctx.restore();
     }
 
+    toggleFlappy() {
+        this.isFlappy = !this.isFlappy;
+        document.getElementById('flappy-overlay').classList.toggle('hidden', !this.isFlappy);
+        
+        if (this.isFlappy) {
+            // Force dynamics mode for the game
+            this.mode = 'dynamics';
+            document.querySelectorAll('.tab-btn').forEach(b => {
+                b.classList.remove('active');
+                if (b.dataset.mode === 'dynamics') b.classList.add('active');
+            });
+            document.getElementById('kinetics-controls').classList.add('hidden');
+            document.getElementById('dynamics-controls').classList.remove('hidden');
+            this.gravity = 15; // Harder gravity for the game
+            document.getElementById('gravity').value = 15;
+            document.getElementById('val-gravity').innerText = "15";
+            this.reset();
+        } else {
+            this.isGameOver = false;
+            this.obstacles = [];
+            document.querySelector('.game-over').classList.add('hidden'); // Force hide on exit
+            this.reset();
+        }
+    }
+
+    spawnObstacle() {
+        const gapSize = 180;
+        const minHeight = 50;
+        const maxHeight = this.canvas.height - gapSize - minHeight;
+        const topHeight = Math.random() * (maxHeight - minHeight) + minHeight;
+        
+        this.obstacles.push({
+            x: this.canvas.width + 50,
+            topHeight: topHeight,
+            gapSize: gapSize,
+            width: 50,
+            passed: false
+        });
+    }
+
+    drawObstacles() {
+        this.ctx.save();
+        this.ctx.fillStyle = 'rgba(99, 102, 241, 0.4)';
+        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+        this.ctx.lineWidth = 2;
+
+        this.obstacles.forEach(obs => {
+            // Top pipe
+            this.ctx.fillRect(obs.x, 0, obs.width, obs.topHeight);
+            this.ctx.strokeRect(obs.x, 0, obs.width, obs.topHeight);
+            
+            // Bottom pipe
+            const bottomY = obs.topHeight + obs.gapSize;
+            const bottomHeight = this.canvas.height - bottomY;
+            this.ctx.fillRect(obs.x, bottomY, obs.width, bottomHeight);
+            this.ctx.strokeRect(obs.x, bottomY, obs.width, bottomHeight);
+        });
+        this.ctx.restore();
+    }
+
     animate(now = performance.now()) {
         if (!this.ctx || !this.particle) {
             requestAnimationFrame((t) => this.animate(t));
@@ -603,33 +691,75 @@ class Simulation {
                 } else {
                     this.particle.updateDynamic(this.fixedDeltaTime, this.gravity);
                     
-                    // Bounce on Floor (Y=0 -> centerY)
-                    if (this.particle.y >= centerY) {
-                        // Check if velocity is low enough to stop bouncing (threshold)
-                        if (Math.abs(this.particle.vy) < 0.2) {
-                            this.particle.vy = 0;
-                            this.particle.y = centerY;
-                        } else {
-                            this.particle.vy = Math.abs(this.particle.vy) * 0.8;
-                            this.particle.y = centerY;
+                    if (this.isFlappy) {
+                        // Game Over on hitting floor or ceiling
+                        if (this.particle.y >= this.canvas.height || this.particle.y <= 0) {
+                            this.isGameOver = true;
+                            document.querySelector('.game-over').classList.remove('hidden');
                         }
-                    }
-                    // Bounce on top wall
-                    if (this.particle.y < 0) {
-                        this.particle.vy = -Math.abs(this.particle.vy) * 0.8;
-                        this.particle.y = 0;
+                    } else {
+                        // Regular Bounce logic (Floor is centerY)
+                        if (this.particle.y >= centerY) {
+                            if (Math.abs(this.particle.vy) < 0.2) {
+                                this.particle.vy = 0;
+                                this.particle.y = centerY;
+                            } else {
+                                this.particle.vy = Math.abs(this.particle.vy) * 0.8;
+                                this.particle.y = centerY;
+                            }
+                        }
+                        // Bounce on top wall
+                        if (this.particle.y < 0) {
+                            this.particle.vy = -Math.abs(this.particle.vy) * 0.8;
+                            this.particle.y = 0;
+                        }
                     }
                 }
             }
             
+            
             // Fixed sample rate for history ensures uniform trail
             this.particle.addHistory(this.particle.y, this.globalTime);
+
+            if (this.isFlappy && !this.isGameOver) {
+                this.spawnTimer += this.fixedDeltaTime;
+                if (this.spawnTimer > 2.0) { // Spawn every 2 seconds
+                    this.spawnObstacle();
+                    this.spawnTimer = 0;
+                }
+
+                // Move obstacles
+                this.obstacles.forEach(obs => {
+                    obs.x -= 3; // Game Speed
+                    
+                    // Score counting
+                    if (!obs.passed && obs.x + obs.width < this.particle.x) {
+                        obs.passed = true;
+                        this.score++;
+                        document.getElementById('score-val').innerText = this.score;
+                    }
+
+                    // Collision detection
+                    const p = this.particle;
+                    if (p.x + p.radius > obs.x && p.x - p.radius < obs.x + obs.width) {
+                        if (p.y - p.radius < obs.topHeight || p.y + p.radius > obs.topHeight + obs.gapSize) {
+                            this.isGameOver = true;
+                            document.querySelector('.game-over').classList.remove('hidden');
+                        }
+                    }
+                });
+
+                // Cleanup
+                this.obstacles = this.obstacles.filter(obs => obs.x + obs.width > -50);
+            }
+
             this.globalTime += this.fixedDeltaTime;
             this.accumulator -= this.fixedDeltaTime;
         }
 
         this.drawBackground(this.globalTime);
         this.drawAxes(this.globalTime);
+        if (this.isFlappy) this.drawObstacles();
         this.particle.draw(this.ctx, this.globalTime, this.timeScale);
         if (this.isPaused) this.drawTheoreticalCurve();
         this.updateStats();
