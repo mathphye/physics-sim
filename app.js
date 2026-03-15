@@ -21,7 +21,15 @@ class Particle {
         this.borderColor = '#ffffff';
         this.borderWidth = 4;
 
+        this.id = Math.random().toString(36).substr(2, 9);
+        this.selected = true;
+
         this.history = []; // Stores {y, time}
+        this.updateRadius();
+    }
+
+    updateRadius() {
+        this.radius = this.baseRadius + Math.sqrt(this.mass) * 3;
     }
 
     // Explicit Kinematic Update: P = P0 + V*t
@@ -32,18 +40,22 @@ class Particle {
         this.y = this.startY - (this.vy * this.pixelsPerMeter) * t;
     }
 
-    // Recursive Dynamic Update
-    updateDynamic(dt, gravity, dim = '1D') {
-        this.ay = -gravity;
-        this.vy += this.ay * dt;
-        if (dim === '2D') {
-            this.x += (this.vx * this.pixelsPerMeter) * dt;
-        }
-        this.y -= (this.vy * this.pixelsPerMeter) * dt; 
+    // Velocity Verlet step 1: Position update
+    updatePositionVerlet(dt) {
+        this.x += (this.vx * this.pixelsPerMeter) * dt + 0.5 * this.ax * this.pixelsPerMeter * dt * dt;
+        this.y -= (this.vy * this.pixelsPerMeter) * dt + 0.5 * this.ay * this.pixelsPerMeter * dt * dt;
     }
 
-    addHistory(y, time) {
-        this.history.push({y, time});
+    // Velocity Verlet step 2: Velocity update (half steps)
+    updateVelocityVerlet(dt, newAx, newAy) {
+        this.vx += 0.5 * (this.ax + newAx) * dt;
+        this.vy += 0.5 * (this.ay + newAy) * dt;
+        this.ax = newAx;
+        this.ay = newAy;
+    }
+
+    addHistory(x, y, time) {
+        this.history.push({x, y, time});
         if (this.history.length > 500) this.history.shift();
     }
 
@@ -55,62 +67,15 @@ class Particle {
     }
 
     draw(ctx, globalTime, timeScale, dim = '1D') {
-        // Calculate radius based on mass (proportional to area/volume feel)
-        this.radius = this.baseRadius + Math.sqrt(this.mass) * 3;
+        this.updateRadius();
 
-        // Ghost Trail (Temporal History)
+        // --- Trails ---
         if (dim === '1D' && this.history.length > 1) {
             ctx.save();
-            
-            // 1. Shadow Ribbon (The volume the particle has occupied)
             ctx.beginPath();
-            ctx.lineWidth = this.radius * 2;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            
-            for (let i = 1; i < this.history.length; i++) {
-                const p1 = this.history[i - 1];
-                const p2 = this.history[i];
-                const x1 = this.x - (globalTime - p1.time) * timeScale;
-                const x2 = this.x - (globalTime - p2.time) * timeScale;
-                
-                if (x2 < 0 && x1 < 0) continue;
-
-                const alpha = (i / this.history.length) * 0.07; // 50% more transparent
-                ctx.beginPath();
-                ctx.strokeStyle = `rgba(99, 102, 241, ${alpha})`;
-                ctx.moveTo(x1, p1.y);
-                ctx.lineTo(x2, p2.y);
-                ctx.stroke();
-            }
-
-            // 2. Discrete "Ghosts" (Faded copies of the particle)
-            for (let i = 0; i < this.history.length; i += 40) {
-                const pt = this.history[i];
-                const xPos = this.x - (globalTime - pt.time) * timeScale;
-                if (xPos < 0 || xPos > this.x - this.radius) continue;
-
-                const alpha = (i / this.history.length) * 0.05; // 50% more transparent
-                
-                // Ghost Body
-                ctx.beginPath();
-                ctx.arc(xPos, pt.y, this.radius, 0, Math.PI * 2);
-                ctx.fillStyle = `rgba(56, 189, 248, ${alpha})`;
-                ctx.fill();
-                
-                // Ghost Rim
-                ctx.beginPath();
-                ctx.arc(xPos, pt.y, this.radius, 0, Math.PI * 2);
-                ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
-                ctx.lineWidth = 1;
-                ctx.stroke();
-            }
-
-            // 3. Mathematical path (The spine)
-            ctx.beginPath();
+            ctx.lineWidth = 2;
             ctx.setLineDash([4, 4]);
-            ctx.lineWidth = 2; // Doubled thickness
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
             for (let i = 0; i < this.history.length; i++) {
                 const pt = this.history[i];
                 const xPos = this.x - (globalTime - pt.time) * timeScale;
@@ -119,45 +84,61 @@ class Particle {
                 else ctx.lineTo(xPos, pt.y);
             }
             ctx.stroke();
-            
             ctx.restore();
         }
 
-        // Horizontal height reference
-        ctx.beginPath();
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
-        ctx.moveTo(0, this.y);
-        ctx.lineTo(this.x, this.y);
-        ctx.stroke();
-
-        // Velocity Vector (Dynamic based on Dimension)
-        if (dim === '1D') {
-            this.drawVector(ctx, this.x, this.y, 0, -this.vy * 40, '#6366f1');
-        } else {
-            this.drawVector(ctx, this.x, this.y, this.vx * 40, -this.vy * 40, '#6366f1');
+        if (dim === 'Orbital' && this.history.length > 1) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = this.color;
+            ctx.globalAlpha = 0.4;
+            for (let i = 0; i < this.history.length; i++) {
+                const pt = this.history[i];
+                if (i === 0) ctx.moveTo(pt.x, pt.y);
+                else ctx.lineTo(pt.x, pt.y);
+            }
+            ctx.stroke();
+            ctx.restore();
         }
 
-        // Main Particle
+        // --- Main Body (Premium Aesthetic) ---
+        ctx.save();
+        
+        // Outer atmospheric glow
+        ctx.shadowBlur = this.radius * 1.5;
+        ctx.shadowColor = this.color;
+        
+        // Polished Rim
         ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius + this.borderWidth / 2, 0, Math.PI * 2);
-        ctx.strokeStyle = this.borderColor;
-        ctx.lineWidth = this.borderWidth;
+        ctx.arc(this.x, this.y, this.radius + 2, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.lineWidth = 2;
         ctx.stroke();
+
+        // High-end Radial Gradient (Sphere effect)
+        const grad = ctx.createRadialGradient(
+            this.x - this.radius*0.3, this.y - this.radius*0.3, this.radius * 0.1,
+            this.x, this.y, this.radius
+        );
+        grad.addColorStop(0, '#ffffff'); 
+        grad.addColorStop(0.3, this.color);
+        grad.addColorStop(1, 'rgba(0,0,0,0.6)');
 
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-        ctx.fillStyle = this.color;
+        ctx.fillStyle = grad;
         ctx.fill();
 
-        // Highlight
-        ctx.beginPath();
-        ctx.arc(this.x - 5, this.y - 5, 3, 0, Math.PI * 2);
-        ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
-        ctx.fill();
+        ctx.restore();
+
+        // Velocity Vector
+        this.drawVector(ctx, this.x, this.y, this.vx * 40, -this.vy * 40, this.color);
     }
 
     drawVector(ctx, x, y, vx, vy, color) {
-        if (Math.abs(vy) < 0.1) return;
+        if (Math.abs(vx) < 0.1 && Math.abs(vy) < 0.1) return;
+        ctx.save();
         ctx.beginPath();
         ctx.moveTo(x, y);
         ctx.lineTo(x + vx, y + vy);
@@ -172,6 +153,7 @@ class Particle {
         ctx.moveTo(x + vx, y + vy);
         ctx.lineTo(x + vx - 10 * Math.cos(angle + Math.PI / 6), y + vy - 10 * Math.sin(angle + Math.PI / 6));
         ctx.stroke();
+        ctx.restore();
     }
 }
 
@@ -194,6 +176,12 @@ class Simulation {
         this.mouseTargetY = 0;
         this.dimensions = '1D'; // '1D', '2D', or 'Orbital'
         this.gravityG = 10.0; // Universal Gravitational Constant
+
+        this.camX = 0;
+        this.camY = 0;
+        this.isPanning = false;
+        this.lastMouseX = 0;
+        this.lastMouseY = 0;
         
         // Flappy Mode State
         this.isFlappy = false;
@@ -203,7 +191,10 @@ class Simulation {
         this.spawnTimer = 0;
 
         this.particles = []; // Array to support multiple bodies
-        this.activeParticle = null; // The one being dragged
+        this.activeParticle = null; 
+        this.comHistory = []; 
+        this.pixelsPerMeter = 40;
+        this.softeningEpsilon = 0.1; // Plummer Softening (meters)
 
         this.init();
         this.animate();
@@ -228,8 +219,13 @@ class Simulation {
         this.globalTime = 0;
         this.lastFrameTime = performance.now();
         this.accumulator = 0;
+        this.camX = 0;
+        this.camY = 0;
+        this.followingCoM = false;
+        document.getElementById('center-com')?.classList.remove('active');
         
         this.particles = [];
+        this.comHistory = [];
         const lockX = this.canvas.width * 0.8;
         const startY = this.canvas.height / 2;
         const massValue = parseFloat(document.getElementById('mass')?.value) || 10;
@@ -255,6 +251,13 @@ class Simulation {
         } else {
             this.activeParticle = null;
         }
+
+        // Bootstrap accelerations so Verlet has initial values
+        const initialAccels = this.calculateAccelerations();
+        this.particles.forEach((p, i) => {
+            p.ax = initialAccels[i]?.ax || 0;
+            p.ay = initialAccels[i]?.ay || (this.dimensions === 'Orbital' ? 0 : -this.gravity);
+        });
     }
 
     setupUI() {
@@ -285,9 +288,10 @@ class Simulation {
         const velYInput = document.getElementById('vel-y');
         if (velYInput) {
             velYInput.addEventListener('input', (e) => {
-                this.particle.vy = parseFloat(e.target.value);
-                if (this.mode === 'kinetics') {
-                    this.particle.resetStartTime(this.globalTime, this.particle.x, this.particle.y);
+                const p = this.activeParticle || this.particles[0];
+                if (p) {
+                    p.vy = parseFloat(e.target.value);
+                    if (this.mode === 'kinetics') p.resetStartTime(this.globalTime, p.x, p.y);
                 }
                 updateVal('vy', e.target.value);
             });
@@ -296,13 +300,18 @@ class Simulation {
         const velXInput = document.getElementById('vel-x');
         if (velXInput) {
             velXInput.addEventListener('input', (e) => {
-                this.particle.vx = parseFloat(e.target.value);
+                const p = this.activeParticle || this.particles[0];
+                if (p) p.vx = parseFloat(e.target.value);
                 updateVal('vx', e.target.value);
             });
         }
 
         document.getElementById('mass').addEventListener('input', (e) => {
-            this.particle.mass = parseFloat(e.target.value);
+            const p = this.activeParticle || this.particles[0];
+            if (p) {
+                p.mass = parseFloat(e.target.value);
+                p.updateRadius();
+            }
             updateVal('mass', e.target.value);
         });
 
@@ -324,13 +333,10 @@ class Simulation {
         const applyForceBtn = document.getElementById('apply-force');
         if (applyForceBtn) {
             applyForceBtn.addEventListener('click', () => {
-                // Set velocity to 10 m/s for precise experimental verification
-                this.particle.vy = 10; 
-                if (this.mode === 'kinetics') {
-                    this.particle.resetStartTime(this.globalTime, this.particle.x, this.particle.y);
-                    // Sync Slider
-                    const vInput = document.getElementById('vel-y');
-                    if (vInput) vInput.value = 10;
+                const p = this.activeParticle || this.particles[0];
+                if (p) {
+                    p.vy = 10; 
+                    if (this.mode === 'kinetics') p.resetStartTime(this.globalTime, p.x, p.y);
                 }
                 updateVal('vy', "10.0");
                 if (this.isPaused) this.updateFormula();
@@ -349,6 +355,7 @@ class Simulation {
             if (this.dimensions === 'Orbital') {
                 this.particles = [];
                 this.activeParticle = null;
+                this.updateParticleList();
             }
         });
 
@@ -376,6 +383,15 @@ class Simulation {
             this.reset();
         });
 
+        document.getElementById('center-com').addEventListener('click', (e) => {
+            this.followingCoM = !this.followingCoM;
+            e.target.classList.toggle('active', this.followingCoM);
+            
+            if (this.followingCoM) {
+                this.updateStickyCenter();
+            }
+        });
+
         // Easter Egg: Flappy Mode
         document.getElementById('easter-egg-btn').addEventListener('click', () => {
             this.toggleFlappy();
@@ -391,6 +407,8 @@ class Simulation {
             const gWrap = document.getElementById('gravity-g-wrap');
             const gravityWrap = document.getElementById('gravity').parentElement;
             const clearBtn = document.getElementById('clear-particles');
+            const centerBtn = document.getElementById('center-com');
+            const manager = document.getElementById('particle-manager');
             const modeDesc = document.getElementById('mode-desc');
 
             // Reset UI visibility
@@ -400,6 +418,8 @@ class Simulation {
             gWrap?.classList.add('hidden');
             gravityWrap?.classList.remove('hidden');
             clearBtn?.classList.add('hidden');
+            centerBtn?.classList.add('hidden');
+            manager?.classList.add('hidden');
 
             if (this.dimensions === '2D') {
                 this.mode = 'dynamics';
@@ -415,6 +435,10 @@ class Simulation {
                 gWrap?.classList.remove('hidden');
                 gravityWrap?.classList.add('hidden');
                 clearBtn?.classList.remove('hidden');
+                centerBtn?.classList.remove('hidden');
+                manager?.classList.remove('hidden');
+                this.updateParticleList();
+                centerBtn?.classList.remove('hidden');
                 modeDesc.innerText = "Universal Gravitation Lab: Click on empty space to add particles. Drag particles to launch them. Bodies attract each other proportionally to mass/distance².";
             } else {
                 // Restore 1D defaults
@@ -444,10 +468,23 @@ class Simulation {
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
             
+            if (e.button === 2) { // Right Click for Pan
+                this.isPanning = true;
+                this.followingCoM = false; // Disable sticky center on manual pan
+                document.getElementById('center-com')?.classList.remove('active');
+                this.lastMouseX = x;
+                this.lastMouseY = y;
+                return;
+            }
+
+            // Transform screen to world coordinates for interaction
+            const worldX = x - this.camX;
+            const worldY = y - this.camY;
+            
             // Check if we clicked on an existing particle
             let target = null;
             for (const p of this.particles) {
-                const dist = Math.sqrt((x - p.x)**2 + (y - p.y)**2);
+                const dist = Math.sqrt((worldX - p.x)**2 + (worldY - p.y)**2);
                 if (dist < p.radius * 2) {
                     target = p;
                     break;
@@ -457,32 +494,52 @@ class Simulation {
             if (target) {
                 this.isDragging = true;
                 this.activeParticle = target;
-                this.mouseTargetX = x;
-                this.mouseTargetY = y;
+                this.mouseTargetX = worldX;
+                this.mouseTargetY = worldY;
                 if (this.dimensions !== '1D') {
                     target.vx = 0; target.vy = 0;
                 }
             } else if (this.dimensions === 'Orbital') {
-                // Add new particle in orbital mode
                 const mass = parseFloat(document.getElementById('mass')?.value) || 10;
-                const newP = new Particle(x, y);
+                const newP = new Particle(worldX, worldY);
                 newP.mass = mass;
+                newP.color = `hsl(${this.particles.length * 137.5 % 360}, 70%, 60%)`;
+                
                 this.particles.push(newP);
-                this.activeParticle = newP;
                 this.isDragging = true;
-                this.mouseTargetX = x;
-                this.mouseTargetY = y;
+                this.activeParticle = newP;
+                this.mouseTargetX = worldX;
+                this.mouseTargetY = worldY;
+                
+                const accels = this.calculateAccelerations();
+                this.particles.forEach((p, i) => { p.ax = accels[i].ax; p.ay = accels[i].ay; });
+                
+                this.updateParticleList();
             }
         });
 
+        this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
         this.canvas.addEventListener('mousemove', (e) => {
-            if (!this.isDragging || !this.activeParticle) return;
             const rect = this.canvas.getBoundingClientRect();
-            this.mouseTargetX = e.clientX - rect.left;
-            this.mouseTargetY = e.clientY - rect.top;
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            if (this.isPanning) {
+                this.camX += (x - this.lastMouseX);
+                this.camY += (y - this.lastMouseY);
+                this.lastMouseX = x;
+                this.lastMouseY = y;
+                return;
+            }
+
+            if (!this.isDragging || !this.activeParticle) return;
+            this.mouseTargetX = x - this.camX;
+            this.mouseTargetY = y - this.camY;
         });
 
         this.canvas.addEventListener('mouseup', () => {
+            this.isPanning = false;
             if (this.isDragging && this.activeParticle) {
                 if (this.mode === 'kinetics' && this.dimensions === '1D') {
                     this.activeParticle.resetStartTime(this.globalTime, this.activeParticle.x, this.activeParticle.y);
@@ -524,9 +581,46 @@ class Simulation {
         this.canvas.height = parent.clientHeight;
     }
 
+    drawGrid(globalTime) {
+        const vSpacing = 40;
+        const hSpacing = this.timeScale;
+        const centerY = this.canvas.height / 2;
+        const lockX = this.canvas.width * 0.8;
+        
+        const wX1 = -this.camX, wX2 = -this.camX + this.canvas.width;
+        const wY1 = -this.camY, wY2 = -this.camY + this.canvas.height;
+
+        this.ctx.save();
+        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+        this.ctx.beginPath();
+
+        if (this.dimensions === '1D') {
+            for (let x = lockX - (globalTime % 1) * hSpacing; x >= wX1; x -= hSpacing) {
+                this.ctx.moveTo(x, wY1); this.ctx.lineTo(x, wY2);
+            }
+            for (let x = lockX - (globalTime % 1) * hSpacing + hSpacing; x <= wX2; x += hSpacing) {
+                this.ctx.moveTo(x, wY1); this.ctx.lineTo(x, wY2);
+            }
+        } else {
+            for (let x = Math.floor(wX1 / vSpacing) * vSpacing; x <= wX2; x += vSpacing) {
+                this.ctx.moveTo(x, wY1); this.ctx.lineTo(x, wY2);
+            }
+        }
+
+        for (let y = Math.floor(wY1 / vSpacing) * vSpacing; y <= wY2; y += vSpacing) {
+            this.ctx.moveTo(wX1, y); this.ctx.lineTo(wX2, y);
+        }
+        this.ctx.stroke();
+        this.ctx.restore();
+    }
+
     drawAxes(globalTime) {
         const centerY = this.canvas.height / 2;
         const lockX = this.canvas.width * 0.8;
+        const wX1 = -this.camX, wX2 = -this.camX + this.canvas.width;
+        const wY1 = -this.camY, wY2 = -this.camY + this.canvas.height;
+
+        this.drawGrid(globalTime);
         
         this.ctx.save();
         this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
@@ -536,37 +630,128 @@ class Simulation {
         // Vertical Reference Axis
         this.ctx.beginPath();
         if (this.dimensions === '1D') {
-            this.ctx.moveTo(lockX, 0);
-            this.ctx.lineTo(lockX, this.canvas.height);
+            this.ctx.moveTo(lockX, wY1);
+            this.ctx.lineTo(lockX, wY2);
         } else {
-            // In 2D, Y axis is usually on the left
-            this.ctx.moveTo(50, 0);
-            this.ctx.lineTo(50, this.canvas.height);
+            this.ctx.moveTo(50, wY1);
+            this.ctx.lineTo(50, wY2);
         }
         this.ctx.stroke();
 
         // Horizontal Zero-Height Axis
         this.ctx.beginPath();
         if (this.dimensions === '1D') {
-            this.ctx.moveTo(0, centerY);
-            this.ctx.lineTo(this.canvas.width, centerY);
+            this.ctx.moveTo(wX1, centerY);
+            this.ctx.lineTo(wX2, centerY);
         } else if (this.dimensions === '2D') {
-            this.ctx.moveTo(0, this.canvas.height - 50);
-            this.ctx.lineTo(this.canvas.width, this.canvas.height - 50);
+            this.ctx.moveTo(wX1, this.canvas.height - 50);
+            this.ctx.lineTo(wX2, this.canvas.height - 50);
         }
         this.ctx.stroke();
+        this.ctx.restore();
+
+        // Center of Mass Marker & Trail (Orbital Only)
+        if (this.dimensions === 'Orbital') {
+            const selected = this.particles.filter(p => p.selected);
+            if (selected.length === 0) return;
+
+            let totalM = 0; let sumX = 0; let sumY = 0;
+            selected.forEach(p => {
+                totalM += p.mass;
+                sumX += p.mass * p.x;
+                sumY += p.mass * p.y;
+            });
+            const comX = sumX / totalM;
+            const comY = sumY / totalM;
+            
+            // Draw Ghosts of CoM iteration
+            this.ctx.save();
+            this.comHistory.forEach((pt, i) => {
+                const alpha = (i / this.comHistory.length) * 0.2;
+                this.ctx.strokeStyle = `rgba(251, 191, 36, ${alpha})`;
+                this.ctx.beginPath();
+                const gs = 4;
+                this.ctx.moveTo(pt.x - gs, pt.y); this.ctx.lineTo(pt.x + gs, pt.y);
+                this.ctx.moveTo(pt.x, pt.y - gs); this.ctx.lineTo(pt.x, pt.y + gs);
+                this.ctx.stroke();
+            });
+
+            // Draw Dashed Trail
+            if (this.comHistory.length > 1) {
+                this.ctx.beginPath();
+                this.ctx.setLineDash([5, 5]);
+                this.ctx.strokeStyle = 'rgba(251, 191, 36, 0.4)';
+                this.ctx.lineWidth = 1.5;
+                for (let i = 0; i < this.comHistory.length; i++) {
+                    const pt = this.comHistory[i];
+                    if (i === 0) this.ctx.moveTo(pt.x, pt.y);
+                    else this.ctx.lineTo(pt.x, pt.y);
+                }
+                this.ctx.stroke();
+            }
+            this.ctx.restore();
+
+            // Draw Cross Marker
+            this.ctx.save();
+            this.ctx.strokeStyle = '#fbbf24';
+            this.ctx.lineWidth = 1;
+            this.ctx.beginPath();
+            const s = 10;
+            this.ctx.moveTo(comX - s, comY); this.ctx.lineTo(comX + s, comY);
+            this.ctx.moveTo(comX, comY - s); this.ctx.lineTo(comX, comY + s);
+            this.ctx.stroke();
+
+            // Calculate Total Momentum & Energy
+            let momentumX = 0; let momentumY = 0;
+            let totalK = 0; let totalU = 0;
+
+            selected.forEach((p, i) => {
+                momentumX += p.mass * p.vx;
+                momentumY += p.mass * p.vy;
+                totalK += 0.5 * p.mass * (p.vx**2 + p.vy**2);
+
+                if (this.dimensions === 'Orbital') {
+                    for (let j = i + 1; j < selected.length; j++) {
+                        const p2 = selected[j];
+                        const dx = (p2.x - p.x) / this.pixelsPerMeter;
+                        const dy = (p2.y - p.y) / this.pixelsPerMeter;
+                        // Conserved potential with softening
+                        const rSoft = Math.sqrt(dx*dx + dy*dy + this.softeningEpsilon**2);
+                        totalU -= (this.gravityG * p.mass * p2.mass) / rSoft;
+                    }
+                } else {
+                    const h = (zeroY - p.y) / this.pixelsPerMeter;
+                    totalU += p.mass * this.gravity * h;
+                }
+            });
+
+            // Draw Momentum Vector (Scaled for visibility)
+            const scale = 5; 
+            this.particles[0]?.drawVector(this.ctx, comX, comY, momentumX * scale, -momentumY * scale, '#a78bfa');
+
+            this.ctx.fillStyle = '#fbbf24';
+            this.ctx.font = '10px Outfit';
+            this.ctx.fillText('Center of Mass', comX + 12, comY + 4);
+            
+            this.ctx.fillStyle = '#a78bfa';
+            this.ctx.fillText(`Momentum (P): ${Math.sqrt(momentumX**2 + momentumY**2).toFixed(1)}kg·m/s`, comX + 12, comY + 16);
+            
+            this.ctx.fillStyle = '#10b981'; // Emerald for Energy
+            this.ctx.fillText(`Energy (E): ${(totalK + totalU).toFixed(1)}J`, comX + 12, comY + 28);
+            this.ctx.restore();
+        }
         
         this.ctx.setLineDash([]);
-        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
         this.ctx.font = '12px Outfit';
         if (this.dimensions === '1D') {
-            this.ctx.fillText('Height (m)', lockX + 10, 20);
-            this.ctx.fillText('Time (t)', 20, centerY + 20);
+            this.ctx.fillText('Position (m)', lockX + 10, wY1 + 20);
+            this.ctx.fillText('Time (t)', wX1 + 20, centerY + 20);
             this.ctx.fillText('0m', lockX + 5, centerY + 15);
-        } else {
-            this.ctx.fillText('Height Y (m)', 60, 20);
-            this.ctx.fillText('Distance X (m)', this.canvas.width - 100, this.canvas.height - 60);
-            this.ctx.fillText('0m', 35, this.canvas.height - 35);
+        } else if (this.dimensions === '2D') {
+            this.ctx.fillText('Position Y (m)', wX1 + 60, wY1 + 20);
+            this.ctx.fillText('Distance X (m)', wX2 - 100, this.canvas.height - 60 - this.camY);
+            this.ctx.fillText('0m', wX1 + 35, this.canvas.height - 35 - this.camY);
         }
 
         // Time Tick Labels (at integer seconds)
@@ -580,7 +765,7 @@ class Simulation {
 
             for (let t = firstLineT; t > firstLineT - 20; t--) {
                 const x = lockX - (globalTime - t) * hSpacing;
-                if (x < 0) break;
+                if (x < wX1) break;
                 const label = (globalTime - t).toFixed(0);
                 if (label !== "0") {
                     this.ctx.fillText(`-${label}s`, x, centerY - 10);
@@ -588,12 +773,10 @@ class Simulation {
             }
         }
         
-        this.ctx.restore();
-        
         if (!this.isFlappy) {
             if (this.dimensions === '1D') {
                 this.drawFloor(centerY, globalTime);
-            } else {
+            } else if (this.dimensions === '2D') {
                 this.drawFloor(this.canvas.height - 50, 0); // Static floor aligned with 2D axis
             }
         }
@@ -626,13 +809,6 @@ class Simulation {
     }
 
     drawBackground(globalTime = 0) {
-        const centerY = this.canvas.height / 2;
-        const vSpacing = 40; // 1m = 40px
-        const hSpacing = this.timeScale; // 1s = timeScale px
-        const lockX = this.canvas.width * 0.8;
-        
-        const offset = (globalTime * this.timeScale) % hSpacing;
-
         const gradient = this.ctx.createRadialGradient(
             this.canvas.width/2, this.canvas.height/2, 0, 
             this.canvas.width/2, this.canvas.height/2, Math.max(this.canvas.width, this.canvas.height)
@@ -648,63 +824,93 @@ class Simulation {
         this.ctx.fillStyle = gradient;
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-        // Stars for Orbital Mode
+        // Stars for Orbital Mode (with Parallax)
         if (this.dimensions === 'Orbital') {
+            this.ctx.save();
+            this.ctx.translate(this.camX * 0.2, this.camY * 0.2); // Parallax factor
             this.ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-            for (let i = 0; i < 50; i++) {
-                const x = (Math.sin(i * 123.45) * 0.5 + 0.5) * this.canvas.width;
-                const y = (Math.cos(i * 678.90) * 0.5 + 0.5) * this.canvas.height;
-                const size = (Math.sin(i) * 0.5 + 0.5) * 2;
-                this.ctx.fillRect(x, y, size, size);
+            for (let i = 0; i < 200; i++) {
+                // Pseudo-random stars covering a large area for panning
+                const x = (Math.sin(i * 123.45) * 10000 + 5000) % 10000 - 5000;
+                const y = (Math.cos(i * 678.90) * 10000 + 5000) % 10000 - 5000;
+                const size = (Math.sin(i + globalTime) + 1.5);
+                this.ctx.beginPath();
+                this.ctx.arc(x, y, size, 0, Math.PI * 2);
+                this.ctx.fill();
             }
+            this.ctx.restore();
         }
-
-        this.ctx.beginPath();
-        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
-        
-        if (this.dimensions === '1D') {
-            // Vertical lines (Representing 1-Second Intervals relative to Particle)
-            for (let x = lockX - (globalTime % 1) * hSpacing; x >= 0; x -= hSpacing) {
-                this.ctx.moveTo(x, 0); this.ctx.lineTo(x, this.canvas.height);
-            }
-            for (let x = lockX - (globalTime % 1) * hSpacing + hSpacing; x <= this.canvas.width; x += hSpacing) {
-                this.ctx.moveTo(x, 0); this.ctx.lineTo(x, this.canvas.height);
-            }
-        } else {
-            // Static Grid for 2D
-            for (let x = 0; x <= this.canvas.width; x += vSpacing) {
-                this.ctx.moveTo(x, 0); this.ctx.lineTo(x, this.canvas.height);
-            }
-        }
-        
-        // Horizontal lines (Representing 1-Meter Intervals)
-        const startY = this.dimensions === '2D' ? this.canvas.height : centerY;
-        for (let y = startY % vSpacing; y <= this.canvas.height; y += vSpacing) {
-            this.ctx.moveTo(0, y); this.ctx.lineTo(this.canvas.width, y);
-        }
-        for (let y = startY % vSpacing - vSpacing; y >= 0; y -= vSpacing) {
-            this.ctx.moveTo(0, y); this.ctx.lineTo(this.canvas.width, y);
-        }
-        this.ctx.stroke();
     }
 
     updateStats() {
         const pixelsPerMeter = 40;
         const zeroY = this.dimensions === '2D' ? this.canvas.height - 50 : this.canvas.height / 2;
-        
-        const p = this.activeParticle || this.particles[0];
-        if (p) {
-            const relY = ((zeroY - p.y) / pixelsPerMeter).toFixed(2);
-            document.getElementById('pos-display').innerText = `${relY}m`;
-            document.getElementById('vel-display').innerText = `${p.vy.toFixed(1)} m/s`;
+        const zeroX = this.dimensions === 'Orbital' ? 0 : 50; 
+
+        let targetX = 0, targetY = 0;
+        let targetVx = 0, targetVy = 0;
+        let totalEnergy = 0;
+
+        const selected = this.particles.filter(p => p.selected);
+        if (selected.length > 0) {
+            let totalM = 0;
+            let sumX = 0; let sumY = 0;
+            let sumVx = 0; let sumVy = 0;
+            let kinetic = 0;
+            let potential = 0;
+
+            selected.forEach((p, i) => {
+                totalM += p.mass;
+                sumX += p.mass * p.x;
+                sumY += p.mass * p.y;
+                sumVx += p.mass * p.vx;
+                sumVy += p.mass * p.vy;
+                kinetic += 0.5 * p.mass * (p.vx**2 + p.vy**2);
+
+                if (this.dimensions === 'Orbital') {
+                    for (let j = i + 1; j < selected.length; j++) {
+                        const p2 = selected[j];
+                        const dx = (p2.x - p.x) / this.pixelsPerMeter;
+                        const dy = (p2.y - p.y) / this.pixelsPerMeter;
+                        const rSoft = Math.sqrt(dx*dx + dy*dy + this.softeningEpsilon**2);
+                        potential -= (this.gravityG * p.mass * p2.mass) / rSoft;
+                    }
+                } else {
+                    const h = (zeroY - p.y) / this.pixelsPerMeter;
+                    potential += p.mass * this.gravity * h;
+                }
+            });
+            targetX = sumX / totalM;
+            targetY = sumY / totalM;
+            targetVx = sumVx / totalM;
+            targetVy = sumVy / totalM;
+            totalEnergy = kinetic + potential;
+        } else if (this.particles.length > 0) {
+            const p = this.activeParticle || this.particles[0];
+            targetX = p.x; targetY = p.y;
+            targetVx = p.vx; targetVy = p.vy;
+            const kinetic = 0.5 * p.mass * (p.vx**2 + p.vy**2);
+            const h = (zeroY - p.y) / pixelsPerMeter;
+            const potential = p.mass * (this.dimensions === 'Orbital' ? 0 : this.gravity) * h;
+            totalEnergy = kinetic + potential;
+        } else {
+            return;
         }
+
+        const relX = ((targetX - zeroX) / pixelsPerMeter).toFixed(1);
+        const relY = ((zeroY - targetY) / pixelsPerMeter).toFixed(1);
+        
+        document.getElementById('pos-display').innerText = `(${relX}, ${relY})m`;
+        document.getElementById('vel-display').innerText = `(${targetVx.toFixed(1)}, ${targetVy.toFixed(1)}) m/s`;
+        document.getElementById('energy-display').innerText = `${totalEnergy.toFixed(1)} J`;
     }
 
     updateFormula() {
-        const textEl = document.getElementById('formula-text');
-        const v = this.particle.vy.toFixed(1);
+        const p = this.particles[0];
+        if (!p) return;
+        const v = p.vy.toFixed(1);
         const zeroY = this.dimensions === '2D' ? this.canvas.height - 50 : this.canvas.height / 2;
-        const y0 = ((zeroY - this.particle.startY) / 40).toFixed(1);
+        const y0 = ((zeroY - p.startY) / 40).toFixed(1);
         const g = this.gravity.toFixed(2);
 
         let latex = "";
@@ -845,82 +1051,65 @@ class Simulation {
     }
 
     animate(now = performance.now()) {
-        if (!this.ctx || this.particles.length === 0 && this.dimensions !== 'Orbital') {
+        if (!this.ctx || (this.particles.length === 0 && this.dimensions !== 'Orbital')) {
             this.lastFrameTime = now;
             requestAnimationFrame((t) => this.animate(t));
             return;
         }
 
         let dt = this.isPaused ? 0 : (now - this.lastFrameTime) / 1000;
-        
-        // Cap dt to prevent physics "explosion" when returning from background
-        // If the gap is larger than 100ms, we assume a pause/background event
         if (dt > 0.1) dt = 0; 
-
         this.lastFrameTime = now;
-        
-        // Stabilize physics and trail with sub-stepping
         this.accumulator += dt;
         
         while (this.accumulator >= this.fixedDeltaTime) {
-            if (!this.isPaused) {
+            // 1. Interaction logic
+            if (this.isDragging && this.activeParticle) {
+                if (this.dimensions === '1D') {
+                    const k = 400; const damping = 15;
+                    const dy_pixels = this.mouseTargetY - this.activeParticle.y;
+                    const dy_meters = dy_pixels / 40;
+                    const force = -k * dy_meters; 
+                    const ay = (force / this.activeParticle.mass);
+                    this.activeParticle.vy += ay * this.fixedDeltaTime;
+                    this.activeParticle.vy *= (1 - damping * this.fixedDeltaTime);
+                    this.activeParticle.y -= (this.activeParticle.vy * 40) * this.fixedDeltaTime;
+                } else {
+                    const sensitivity = 0.5;
+                    this.activeParticle.vx = (this.mouseTargetX - this.activeParticle.x) / 10 * sensitivity;
+                    this.activeParticle.vy = -(this.mouseTargetY - this.activeParticle.y) / 10 * sensitivity;
+                }
+                const valVy = document.getElementById('val-vy');
+                if (valVy) valVy.innerText = this.activeParticle.vy.toFixed(1);
+                const valVx = document.getElementById('val-vx');
+                if (valVx) valVx.innerText = this.activeParticle.vx.toFixed(1);
+            }
+
+            // 2. World Physics logic
+            const isFrozenByDrag = this.isDragging && (this.dimensions === '2D' || this.dimensions === 'Orbital');
+            if (!this.isPaused && !isFrozenByDrag) {
                 const centerY = this.canvas.height / 2;
-                
-                if (this.isDragging && this.activeParticle) {
-                    if (this.dimensions === '1D') {
-                        const k = 400; const damping = 15;
-                        const dy_pixels = this.mouseTargetY - this.activeParticle.y;
-                        const dy_meters = dy_pixels / 40;
-                        const force = -k * dy_meters; 
-                        const ay = (force / this.activeParticle.mass);
-                        this.activeParticle.vy += ay * this.fixedDeltaTime;
-                        this.activeParticle.vy *= (1 - damping * this.fixedDeltaTime);
-                        this.activeParticle.y -= (this.activeParticle.vy * 40) * this.fixedDeltaTime;
-                    } else {
-                        // Slingshot Aiming for 2D/Orbital
-                        const sensitivity = 0.5;
-                        this.activeParticle.vx = (this.mouseTargetX - this.activeParticle.x) / 10 * sensitivity;
-                        this.activeParticle.vy = -(this.mouseTargetY - this.activeParticle.y) / 10 * sensitivity;
-                    }
-
-                    // Sync UI
-                    const valVy = document.getElementById('val-vy');
-                    if (valVy) valVy.innerText = this.activeParticle.vy.toFixed(1);
-                    const valVx = document.getElementById('val-vx');
-                    if (valVx) valVx.innerText = this.activeParticle.vx.toFixed(1);
-                } 
-
-                // Physics Steps
                 if (this.dimensions === 'Orbital') {
-                    for (let i = 0; i < this.particles.length; i++) {
-                        const p1 = this.particles[i];
-                        if (this.isDragging && p1 === this.activeParticle) continue;
+                    this.particles.forEach(p => {
+                        if (this.isDragging && p === this.activeParticle) return;
+                        p.updatePositionVerlet(this.fixedDeltaTime);
+                    });
 
-                        let fx = 0, fy = 0;
-                        for (let j = 0; j < this.particles.length; j++) {
-                            if (i === j) continue;
-                            const p2 = this.particles[j];
-                            const dx = p2.x - p1.x;
-                            const dy = p2.y - p1.y;
-                            const dist = Math.max(Math.sqrt(dx**2 + dy**2), 15);
-                            
-                            const r = dist / 40;
-                            const f = (this.gravityG * p1.mass * p2.mass) / (r * r);
-                            fx += f * (dx/dist);
-                            fy -= f * (dy/dist); 
+                    const newAccels = this.calculateAccelerations();
+
+                    this.particles.forEach((p, i) => {
+                        if (this.isDragging && p === this.activeParticle) {
+                            p.ax = newAccels[i].ax; p.ay = newAccels[i].ay;
+                            return;
                         }
-                        p1.vx += (fx / p1.mass) * this.fixedDeltaTime;
-                        p1.vy += (fy / p1.mass) * this.fixedDeltaTime;
-                        p1.x += (p1.vx * 40) * this.fixedDeltaTime;
-                        p1.y -= (p1.vy * 40) * this.fixedDeltaTime;
-                    }
+                        p.updateVelocityVerlet(this.fixedDeltaTime, newAccels[i].ax, newAccels[i].ay);
+                    });
                 } else {
                     const p = this.particles[0];
                     if (p && !(this.isDragging && p === this.activeParticle)) {
                         if (this.mode === 'kinetics') {
                             const elapsedSinceStart = this.globalTime - p.startTime;
                             p.updateKinetic(elapsedSinceStart, this.dimensions); 
-                            
                             const limitY = this.dimensions === '2D' ? this.canvas.height : centerY;
                             if (p.y >= limitY) {
                                 p.vy = Math.abs(p.vy); p.y = limitY;
@@ -929,43 +1118,29 @@ class Simulation {
                                 p.vy = -Math.abs(p.vy); p.y = 0;
                                 p.resetStartTime(this.globalTime, p.x, p.y);
                             }
-                            
-                            if (this.dimensions === '2D') {
-                                if (p.x >= this.canvas.width) {
-                                    p.vx = -Math.abs(p.vx); p.x = this.canvas.width;
-                                    p.resetStartTime(this.globalTime, p.x, p.y);
-                                } else if (p.x <= 0) {
-                                    p.vx = Math.abs(p.vx); p.x = 0;
-                                    p.resetStartTime(this.globalTime, p.x, p.y);
-                                }
-                            }
                         } else {
-                            p.updateDynamic(this.fixedDeltaTime, this.gravity, this.dimensions);
-                            
-                            if (this.isFlappy) {
-                                if (p.y >= this.canvas.height || p.y <= 0) {
-                                    this.isGameOver = true;
-                                    document.querySelector('.game-over').classList.remove('hidden');
-                                }
-                            } else {
-                                const limitY = this.dimensions === '2D' ? this.canvas.height : centerY;
-                                if (p.y >= limitY) {
-                                    if (Math.abs(p.vy) < 0.2) { p.vy = 0; p.y = limitY; }
-                                    else { p.vy = Math.abs(p.vy) * 0.8; p.y = limitY; }
-                                } else if (p.y < 0) {
-                                    p.vy = -Math.abs(p.vy) * 0.8; p.y = 0;
-                                }
-                                if (this.dimensions === '2D') {
-                                    if (p.x >= this.canvas.width) { p.vx = -Math.abs(p.vx) * 0.8; p.x = this.canvas.width; }
-                                    else if (p.x <= 0) { p.vx = Math.abs(p.vx) * 0.8; p.x = 0; }
-                                }
+                            p.updatePositionVerlet(this.fixedDeltaTime);
+                            p.updateVelocityVerlet(this.fixedDeltaTime, 0, -this.gravity);
+                            const limitY = this.dimensions === '2D' ? this.canvas.height : centerY;
+                            if (p.y >= limitY) {
+                                p.y = limitY; p.vy = Math.abs(p.vy) * 0.8; p.ay = 0;
+                            } else if (p.y < 0) {
+                                p.vy = -Math.abs(p.vy) * 0.8; p.y = 0;
+                            }
+                            if (this.dimensions === '2D') {
+                                if (p.x >= this.canvas.width) { p.vx = -Math.abs(p.vx) * 0.8; p.x = this.canvas.width; }
+                                else if (p.x <= 0) { p.vx = Math.abs(p.vx) * 0.8; p.x = 0; }
+                            }
+                            if (this.isFlappy && (p.y >= this.canvas.height || p.y <= 0)) {
+                                this.isGameOver = true;
+                                document.querySelector('.game-over').classList.remove('hidden');
                             }
                         }
                     }
                 }
             }
             
-            this.particles.forEach(p => p.addHistory(p.y, this.globalTime));
+            this.particles.forEach(p => p.addHistory(p.x, p.y, this.globalTime));
 
             if (this.isFlappy && !this.isGameOver) {
                 this.spawnTimer += this.fixedDeltaTime;
@@ -988,17 +1163,204 @@ class Simulation {
                 });
                 this.obstacles = this.obstacles.filter(obs => obs.x + obs.width > -50);
             }
+
+            if (this.dimensions === 'Orbital' && !this.isPaused) {
+                const selected = this.particles.filter(p => p.selected);
+                if (selected.length > 0) {
+                    let totalM = 0; let sumX = 0; let sumY = 0;
+                    selected.forEach(p => {
+                        totalM += p.mass; sumX += p.mass * p.x; sumY += p.mass * p.y;
+                    });
+                    this.comHistory.push({x: sumX / totalM, y: sumY / totalM});
+                    if (this.comHistory.length > 400) this.comHistory.shift();
+                }
+            }
+
             this.globalTime += this.fixedDeltaTime;
             this.accumulator -= this.fixedDeltaTime;
         }
 
+        if (this.followingCoM && this.dimensions === 'Orbital') this.updateStickyCenter();
+
         this.drawBackground(this.globalTime);
+        this.ctx.save();
+        this.ctx.translate(this.camX, this.camY);
         this.drawAxes(this.globalTime);
         if (this.isFlappy) this.drawObstacles();
         this.particles.forEach(p => p.draw(this.ctx, this.globalTime, this.timeScale, this.dimensions));
         if (this.isPaused) this.drawTheoreticalCurve();
+        this.ctx.restore();
+
+        this.drawMinimap();
         this.updateStats();
         requestAnimationFrame((t) => this.animate(t));
+    }
+
+    drawMinimap() {
+        if (this.dimensions !== 'Orbital' || this.particles.length === 0) return;
+        
+        const mapWidth = 240;
+        const aspectRatio = this.canvas.height / this.canvas.width;
+        const mapHeight = mapWidth * aspectRatio;
+        const padding = 20;
+        const x = this.canvas.width - mapWidth - padding;
+        const y = padding;
+
+        this.ctx.save();
+        // Background
+        this.ctx.fillStyle = 'rgba(15, 23, 42, 0.7)';
+        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.roundRect(x, y, mapWidth, mapHeight, 12);
+        this.ctx.fill();
+        this.ctx.stroke();
+        this.ctx.clip();
+
+        // Calculate world bounds
+        let minX = -1000, maxX = 1000, minY = -1000, maxY = 1000;
+        this.particles.forEach(p => {
+            minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+            minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+        });
+        
+        // Include viewport in bounds
+        const viewW = this.canvas.width;
+        const viewH = this.canvas.height;
+        const vX1 = -this.camX, vY1 = -this.camY;
+        const vX2 = -this.camX + viewW, vY2 = -this.camY + viewH;
+        
+        minX = Math.min(minX, vX1); maxX = Math.max(maxX, vX2);
+        minY = Math.min(minY, vY1); maxY = Math.max(maxY, vY2);
+
+        const worldW = (maxX - minX) * 1.2;
+        const worldH = (maxY - minY) * 1.2;
+        
+        // Match minimap aspect ratio scale
+        const mapScale = Math.min(mapWidth / worldW, mapHeight / worldH);
+        
+        const centerWorldX = (minX + maxX) / 2;
+        const centerWorldY = (minY + maxY) / 2;
+
+        const toMapX = (wx) => x + mapWidth/2 + (wx - centerWorldX) * mapScale;
+        const toMapY = (wy) => y + mapHeight/2 + (wy - centerWorldY) * mapScale;
+
+        // Draw Viewport
+        this.ctx.strokeStyle = 'rgba(251, 191, 36, 0.5)';
+        this.ctx.strokeRect(toMapX(vX1), toMapY(vY1), viewW * mapScale, viewH * mapScale);
+
+        // Draw Particles
+        this.particles.forEach(p => {
+            this.ctx.fillStyle = p.color;
+            this.ctx.beginPath();
+            this.ctx.arc(toMapX(p.x), toMapY(p.y), Math.max(2, p.radius * mapScale), 0, Math.PI * 2);
+            this.ctx.fill();
+        });
+
+        this.ctx.restore();
+    }
+
+    updateParticleList() {
+        const list = document.getElementById('particle-list');
+        if (!list) return;
+        list.innerHTML = "";
+
+        this.particles.forEach((p, index) => {
+            const item = document.createElement('div');
+            item.className = 'particle-item';
+            
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.checked = p.selected;
+            checkbox.onclick = (e) => {
+                p.selected = e.target.checked;
+                e.stopPropagation();
+            };
+
+            const dot = document.createElement('div');
+            dot.className = 'pt-color-dot';
+            dot.style.backgroundColor = p.color;
+
+            const name = document.createElement('span');
+            name.className = 'pt-name';
+            name.innerText = `Body ${index + 1} (${p.mass}kg)`;
+
+            const actions = document.createElement('div');
+            actions.className = 'pt-actions';
+            
+            const centerBtn = document.createElement('button');
+            centerBtn.innerText = "Center";
+            centerBtn.onclick = (e) => {
+                this.camX = (this.canvas.width / 2) - p.x;
+                this.camY = (this.canvas.height / 2) - p.y;
+                e.stopPropagation();
+            };
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.innerText = "×";
+            deleteBtn.onclick = (e) => {
+                this.particles.splice(index, 1);
+                this.updateParticleList();
+                e.stopPropagation();
+            };
+
+            item.appendChild(checkbox);
+            item.appendChild(dot);
+            item.appendChild(name);
+            actions.appendChild(centerBtn);
+            actions.appendChild(deleteBtn);
+            item.appendChild(actions);
+            
+            list.appendChild(item);
+        });
+    }
+
+    updateStickyCenter() {
+        const selected = this.particles.filter(p => p.selected);
+        if (selected.length === 0) return;
+
+        let totalM = 0; let sumX = 0; let sumY = 0;
+        selected.forEach(p => {
+            totalM += p.mass;
+            sumX += p.mass * p.x;
+            sumY += p.mass * p.y;
+        });
+        const comWorldX = sumX / totalM;
+        const comWorldY = sumY / totalM;
+
+        this.camX = (this.canvas.width / 2) - comWorldX;
+        this.camY = (this.canvas.height / 2) - comWorldY;
+    }
+
+    calculateAccelerations() {
+        const accels = this.particles.map(() => ({ ax: 0, ay: 0 }));
+        
+        for (let i = 0; i < this.particles.length; i++) {
+            const p1 = this.particles[i];
+            for (let j = i + 1; j < this.particles.length; j++) {
+                const p2 = this.particles[j];
+                
+                const dx = (p2.x - p1.x) / this.pixelsPerMeter;
+                const dy = (p2.y - p1.y) / this.pixelsPerMeter;
+                
+                // Plummer Softening for faithful constant-energy orbits
+                // Force = G*M1*M2 * r / (r^2 + eps^2)^(3/2)
+                const r2 = dx*dx + dy*dy;
+                const distSoft3 = Math.pow(r2 + this.softeningEpsilon**2, 1.5);
+                
+                const fCommon = (this.gravityG * p1.mass * p2.mass) / distSoft3;
+                
+                const fx = fCommon * dx;
+                const fy = fCommon * dy;
+                
+                accels[i].ax += fx / p1.mass;
+                accels[i].ay -= fy / p1.mass; // Screen Y is inverted
+                
+                accels[j].ax -= fx / p2.mass;
+                accels[j].ay += fy / p2.mass;
+            }
+        }
+        return accels;
     }
 }
 

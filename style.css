@@ -252,38 +252,43 @@ main {
     display: none !important;
 }
 
-button#reset-btn, button#pause-btn, button#apply-force {
-    background: rgba(255, 255, 255, 0.05);
+button#reset-btn, button#pause-btn, button#apply-force, button#clear-particles, button#center-com {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
     border: 1px solid var(--glass-border);
     color: var(--text-primary);
-    padding: 12px;
+    padding: 10px 16px;
     border-radius: 12px;
     cursor: pointer;
     font-family: inherit;
     font-weight: 600;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    font-size: 0.85rem;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
 }
 
-button#apply-force {
-    background: var(--accent-color);
+button#apply-force, button#center-com.active {
+    background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-dark) 100%);
     border: none;
     box-shadow: 0 4px 15px var(--accent-glow);
 }
 
-button#apply-force:hover {
-    background: var(--accent-dark);
+button#apply-force:hover, button#center-com.active:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px var(--accent-glow);
+    box-shadow: 0 8px 25px var(--accent-glow);
 }
 
-button#reset-btn:hover, button#pause-btn:hover {
-    background: rgba(255, 255, 255, 0.15);
+button#reset-btn:hover, button#pause-btn:hover, button#clear-particles:hover, button#center-com:hover {
+    background: rgba(255, 255, 255, 0.1);
     border-color: rgba(255, 255, 255, 0.3);
+    transform: translateY(-1px);
 }
 
 button#pause-btn.active {
-    background: var(--analysis-color);
+    background: linear-gradient(135deg, var(--analysis-color) 0%, #d97706 100%);
     border-color: transparent;
     box-shadow: 0 4px 15px var(--analysis-glow);
 }
@@ -425,3 +430,77 @@ footer p span:hover {
     letter-spacing: 1px;
     animation: pulse 1.5s infinite;
 }
+
+/* Particle Manager List */
+.particle-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 200px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.particle-list::-webkit-scrollbar {
+    width: 4px;
+}
+
+.particle-list::-webkit-scrollbar-thumb {
+    background: var(--glass-border);
+    border-radius: 10px;
+}
+
+.particle-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 8px 12px;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+}
+
+.particle-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--glass-border);
+}
+
+.particle-item input[type="checkbox"] {
+    accent-color: var(--accent-color);
+    cursor: pointer;
+}
+
+.particle-item .pt-color-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.particle-item .pt-name {
+    flex: 1;
+    color: var(--text-primary);
+}
+
+.particle-item .pt-actions {
+    display: flex;
+    gap: 5px;
+}
+
+.particle-item button {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.7rem;
+    padding: 2px 5px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.particle-item button:hover {
+    color: var(--accent-color);
+    background: rgba(255, 255, 255, 0.1);
+}
+

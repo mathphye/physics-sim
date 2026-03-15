@@ -69,7 +69,14 @@
                     </div>
                     <div class="btn-group">
                         <button id="apply-force">Apply Impulse</button>
+                        <button id="center-com" class="hidden">Center on Selection</button>
                         <button id="clear-particles" class="hidden">Clear All</button>
+                    </div>
+                    <div id="particle-manager" class="control-group hidden">
+                        <h3>Particle Manager</h3>
+                        <div id="particle-list" class="particle-list">
+                            <!-- Populated via JS -->
+                        </div>
                     </div>
                 </div>
 
@@ -100,12 +107,16 @@
 
             <div id="ui-overlay" class="glass">
                 <div class="stat">
-                    <span class="label">Height (Y):</span>
-                    <span id="pos-display" class="value">0m</span>
+                    <span class="label">Position (X, Y):</span>
+                    <span id="pos-display" class="value">(0, 0)m</span>
                 </div>
                 <div class="stat">
-                    <span class="label">Velocity (Vy):</span>
-                    <span id="vel-display" class="value">0.0 m/s</span>
+                    <span class="label">Velocity (Vx, Vy):</span>
+                    <span id="vel-display" class="value">(0.0, 0.0) m/s</span>
+                </div>
+                <div class="stat">
+                    <span class="label">Total Energy (E):</span>
+                    <span id="energy-display" class="value">0 J</span>
                 </div>
             </div>
         </main>
