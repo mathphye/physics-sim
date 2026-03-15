@@ -18,7 +18,13 @@
     <div id="app-container">
         <header>
             <h1>Physics<span>Sim</span></h1>
-            <p>1D Motion Lab</p>
+            <div class="lab-selector">
+                <select id="lab-type">
+                    <option value="1D" selected>1D Motion Lab</option>
+                    <option value="2D">2D Motion Lab</option>
+                    <option value="Orbital">Universal Gravitation Lab</option>
+                </select>
+            </div>
         </header>
 
         <main>
@@ -31,11 +37,16 @@
                 </div>
 
                 <div id="kinetics-controls" class="control-group">
-                    <h3>Vertical Motion</h3>
+                    <h3>Initial Conditions</h3>
                     <div class="input-wrap">
                         <label>Velocity Y (m/s)</label>
                         <input type="range" id="vel-y" min="-10" max="10" value="0" step="0.1">
                         <span class="val-display" id="val-vy">0</span>
+                    </div>
+                    <div id="vx-wrap" class="input-wrap hidden">
+                        <label>Velocity X (m/s)</label>
+                        <input type="range" id="vel-x" min="-10" max="10" value="0" step="0.1">
+                        <span class="val-display" id="val-vx">0.0</span>
                     </div>
                 </div>
 
@@ -51,8 +62,14 @@
                         <input type="range" id="gravity" min="0" max="20" value="9.81" step="0.01">
                         <span class="val-display" id="val-gravity">9.81</span>
                     </div>
+                    <div id="gravity-g-wrap" class="input-wrap hidden">
+                        <label>Gravitational Constant (G)</label>
+                        <input type="range" id="gravity-g" min="0" max="50" value="10" step="0.1">
+                        <span class="val-display" id="val-gravity-g">10.0</span>
+                    </div>
                     <div class="btn-group">
                         <button id="apply-force">Apply Impulse</button>
+                        <button id="clear-particles" class="hidden">Clear All</button>
                     </div>
                 </div>
 
