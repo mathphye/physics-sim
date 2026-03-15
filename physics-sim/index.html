@@ -6,6 +6,10 @@
     <title>Physics Sim - Foundations</title>
     <meta name="description" content="A solid foundation for an interactive physics simulator using HTML5 Canvas.">
     <link rel="stylesheet" href="style.css">
+    
+    <!-- KaTeX for math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
@@ -14,7 +18,7 @@
     <div id="app-container">
         <header>
             <h1>Physics<span>Sim</span></h1>
-            <p>Particle Laboratory</p>
+            <p>1D Motion Lab</p>
         </header>
 
         <main>
@@ -27,14 +31,9 @@
                 </div>
 
                 <div id="kinetics-controls" class="control-group">
-                    <h3>Motion Parameters</h3>
+                    <h3>Vertical Motion</h3>
                     <div class="input-wrap">
-                        <label>Velocity X</label>
-                        <input type="range" id="vel-x" min="-10" max="10" value="0" step="0.1">
-                        <span class="val-display" id="val-vx">0</span>
-                    </div>
-                    <div class="input-wrap">
-                        <label>Velocity Y</label>
+                        <label>Velocity Y (m/s)</label>
                         <input type="range" id="vel-y" min="-10" max="10" value="0" step="0.1">
                         <span class="val-display" id="val-vy">0</span>
                     </div>
@@ -48,9 +47,9 @@
                         <span class="val-display" id="val-mass">10</span>
                     </div>
                     <div class="input-wrap">
-                        <label>Gravity</label>
-                        <input type="range" id="gravity" min="0" max="2" value="0.5" step="0.05">
-                        <span class="val-display" id="val-gravity">0.5</span>
+                        <label>Gravity (m/s²)</label>
+                        <input type="range" id="gravity" min="0" max="20" value="9.81" step="0.01">
+                        <span class="val-display" id="val-gravity">9.81</span>
                     </div>
                     <div class="btn-group">
                         <button id="apply-force">Apply Impulse</button>
@@ -58,26 +57,44 @@
                 </div>
 
                 <div class="info-box">
-                    <p id="mode-desc">Kinetics: Describing motion through position and velocity.</p>
+                    <p id="mode-desc">Kinetics: Position vs Time (1D). Vertical axis shows height, horizontal axis shows history.</p>
                 </div>
 
-                <button id="reset-btn">Reset Simulation</button>
+                <div class="btn-group">
+                    <button id="pause-btn">Pause & Analyze</button>
+                    <button id="reset-btn">Reset</button>
+                </div>
+            </div>
+
+            <div id="formula-overlay" class="glass hidden">
+                <div class="formula-box">
+                    <span class="formula-label">Current Equation:</span>
+                    <div id="formula-text">y(t) = y₀ + v·t</div>
+                </div>
+            </div>
+
+            <div id="bottom-controls" class="glass">
+                <div class="speed-control">
+                    <label>Time Dilation (px/s)</label>
+                    <input type="range" id="time-scale" min="20" max="250" value="100" step="5">
+                    <span class="val-display" id="val-time-scale">100</span>
+                </div>
             </div>
 
             <div id="ui-overlay" class="glass">
                 <div class="stat">
-                    <span class="label">Position:</span>
-                    <span id="pos-display" class="value">0, 0</span>
+                    <span class="label">Height (Y):</span>
+                    <span id="pos-display" class="value">0m</span>
                 </div>
                 <div class="stat">
-                    <span class="label">Velocity:</span>
+                    <span class="label">Velocity (Vy):</span>
                     <span id="vel-display" class="value">0.0 m/s</span>
                 </div>
             </div>
         </main>
 
-        <footer class="glass">
-            <p>V1.0 - Alpha Foundation</p>
+        <footer>
+            <p>mathphye + vibe code <span>ai</span></p>
         </footer>
     </div>
     <script src="app.js"></script>

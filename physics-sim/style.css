@@ -2,6 +2,9 @@
     --bg-color: #0a0a0c;
     --accent-color: #6366f1;
     --accent-glow: rgba(99, 102, 241, 0.4);
+    --accent-dark: #4f46e5;
+    --analysis-color: #fbbf24;
+    --analysis-glow: rgba(251, 191, 36, 0.4);
     --text-primary: #f8fafc;
     --text-secondary: #94a3b8;
     --glass-bg: rgba(30, 41, 59, 0.7);
@@ -84,12 +87,48 @@ main {
     border-radius: 16px;
 }
 
+#bottom-controls {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0.75rem 2rem;
+    z-index: 25;
+    min-width: 400px;
+}
+
+.speed-control {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.speed-control label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    font-weight: 600;
+}
+
+.speed-control input[type="range"] {
+    flex: 1;
+    accent-color: var(--accent-color);
+}
+
+.speed-control .val-display {
+    min-width: 40px;
+    text-align: right;
+    margin-bottom: 0;
+}
+
 #ui-overlay {
     position: absolute;
     bottom: 20px;
     right: 20px;
     padding: 1rem 1.5rem;
-    z-index: 10;
+    z-index: 20;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
@@ -105,7 +144,17 @@ main {
     z-index: 20;
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
+    gap: 1rem;
+}
+
+.btn-group {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+}
+
+.btn-group button {
+    flex: 1;
 }
 
 .tabs {
@@ -178,29 +227,40 @@ main {
     display: none;
 }
 
-button#reset-btn {
-    background: rgba(255,255,255,0.1);
+button#reset-btn, button#pause-btn, button#apply-force {
+    background: rgba(255, 255, 255, 0.05);
     border: 1px solid var(--glass-border);
-    color: white;
-    padding: 10px;
-    border-radius: 8px;
+    color: var(--text-primary);
+    padding: 12px;
+    border-radius: 12px;
     cursor: pointer;
-    transition: all 0.2s;
-}
-
-button#reset-btn:hover {
-    background: rgba(255,255,255,0.2);
+    font-family: inherit;
+    font-weight: 600;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    font-size: 0.85rem;
 }
 
 button#apply-force {
-    width: 100%;
     background: var(--accent-color);
     border: none;
-    color: white;
-    padding: 10px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-weight: bold;
+    box-shadow: 0 4px 15px var(--accent-glow);
+}
+
+button#apply-force:hover {
+    background: var(--accent-dark);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px var(--accent-glow);
+}
+
+button#reset-btn:hover, button#pause-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+button#pause-btn.active {
+    background: var(--analysis-color);
+    border-color: transparent;
+    box-shadow: 0 4px 15px var(--analysis-glow);
 }
 
 .stat {
@@ -226,13 +286,42 @@ button#apply-force {
     margin-top: 0.5rem;
 }
 
-footer {
-    margin-top: 1.5rem;
-    padding: 0.75rem 1.5rem;
-    align-self: flex-start;
+#formula-overlay {
+    position: absolute;
+    top: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 1.5rem 3rem;
+    z-index: 30;
+    min-width: 450px;
+    border-top: 4px solid var(--analysis-color);
+    animation: slideDown 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    text-align: center;
+}
+
+.formula-box {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.formula-label {
     font-size: 0.8rem;
     color: var(--text-secondary);
-    z-index: 10;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-weight: 600;
+}
+
+#formula-text {
+    color: var(--analysis-color);
+    text-shadow: 0 2px 20px rgba(0,0,0,0.5);
+    /* KaTeX handles font and size */
+}
+
+@keyframes slideDown {
+    from { transform: translate(-50%, -100%); opacity: 0; }
+    to { transform: translate(-50%, 0); opacity: 1; }
 }
 
 /* Animations */
@@ -240,4 +329,23 @@ footer {
     0% { transform: scale(1); opacity: 0.8; }
     50% { transform: scale(1.05); opacity: 1; }
     100% { transform: scale(1); opacity: 0.8; }
+}
+
+footer {
+    margin-top: 1.5rem;
+    text-align: center;
+    z-index: 10;
+}
+
+footer p {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    font-weight: 300;
+}
+
+footer p span {
+    color: var(--accent-color);
+    font-weight: 600;
 }
