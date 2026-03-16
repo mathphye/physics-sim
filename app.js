@@ -195,6 +195,9 @@ class Simulation {
         this.comHistory = []; 
         this.pixelsPerMeter = 40;
         this.softeningEpsilon = 0.1; // Plummer Softening (meters)
+        this.initialEnergy = null; 
+        this.energyDriftThreshold = 0.01; // 1% drift limit before warning
+        this.lastSelectedIds = ""; 
 
         this.init();
         this.animate();
@@ -226,6 +229,8 @@ class Simulation {
         
         this.particles = [];
         this.comHistory = [];
+        this.initialEnergy = null; 
+        document.getElementById('fidelity-warning')?.classList.add('hidden');
         const lockX = this.canvas.width * 0.8;
         const startY = this.canvas.height / 2;
         const massValue = parseFloat(document.getElementById('mass')?.value) || 10;
@@ -317,6 +322,7 @@ class Simulation {
 
         document.getElementById('gravity').addEventListener('input', (e) => {
             this.gravity = parseFloat(e.target.value);
+            this.initialEnergy = null;
             updateVal('gravity', e.target.value);
         });
 
@@ -347,6 +353,7 @@ class Simulation {
         if (gInput) {
             gInput.addEventListener('input', (e) => {
                 this.gravityG = parseFloat(e.target.value);
+                this.initialEnergy = null;
                 updateVal('gravity-g', e.target.value);
             });
         }
@@ -355,13 +362,14 @@ class Simulation {
             if (this.dimensions === 'Orbital') {
                 this.particles = [];
                 this.activeParticle = null;
+                this.initialEnergy = null;
                 this.updateParticleList();
             }
         });
 
         document.getElementById('pause-btn').addEventListener('click', (e) => {
             this.isPaused = !this.isPaused;
-            e.target.innerText = this.isPaused ? "Resume" : "Pause";
+            e.target.innerText = this.isPaused ? "Play ▶" : "Pause ⏸";
             e.target.classList.toggle('active', this.isPaused);
             document.getElementById('formula-overlay').classList.toggle('hidden', !this.isPaused);
             if (this.isPaused) this.updateFormula();
@@ -369,7 +377,7 @@ class Simulation {
 
         document.getElementById('reset-btn').addEventListener('click', () => {
             this.isPaused = false;
-            document.getElementById('pause-btn').innerText = "Pause";
+            document.getElementById('pause-btn').innerText = "Pause ⏸";
             document.getElementById('pause-btn').classList.remove('active');
             document.getElementById('formula-overlay').classList.add('hidden');
             
@@ -514,6 +522,7 @@ class Simulation {
                 const accels = this.calculateAccelerations();
                 this.particles.forEach((p, i) => { p.ax = accels[i].ax; p.ay = accels[i].ay; });
                 
+                this.initialEnergy = null; 
                 this.updateParticleList();
             }
         });
@@ -897,6 +906,29 @@ class Simulation {
             return;
         }
 
+        const currentSelectedIds = selected.map(p => p.id).join(',');
+        if (currentSelectedIds !== this.lastSelectedIds) {
+            this.initialEnergy = null; // Selection changed, reset reference
+            this.lastSelectedIds = currentSelectedIds;
+        }
+
+        if (this.dimensions === 'Orbital' && totalEnergy !== 0) {
+            if (this.initialEnergy === null || this.isDragging) {
+                // If dragging or new selection, we keep recalibrating reference
+                this.initialEnergy = totalEnergy;
+                document.getElementById('fidelity-warning')?.classList.add('hidden');
+            } else if (!this.isPaused) {
+                const drift = Math.abs(totalEnergy - this.initialEnergy) / (Math.abs(this.initialEnergy) + 1e-9);
+                if (drift > this.energyDriftThreshold) {
+                    document.getElementById('fidelity-warning')?.classList.remove('hidden');
+                } else {
+                    document.getElementById('fidelity-warning')?.classList.add('hidden');
+                }
+            }
+        } else {
+            document.getElementById('fidelity-warning')?.classList.add('hidden');
+        }
+
         const relX = ((targetX - zeroX) / pixelsPerMeter).toFixed(1);
         const relY = ((zeroY - targetY) / pixelsPerMeter).toFixed(1);
         
@@ -1010,6 +1042,8 @@ class Simulation {
         } else {
             this.isGameOver = false;
             this.obstacles = [];
+            document.getElementById('pause-btn').innerText = "Pause ⏸";
+            document.getElementById('pause-btn').classList.remove('active');
             document.querySelector('.game-over').classList.add('hidden'); // Force hide on exit
             this.reset();
         }
@@ -1057,13 +1091,13 @@ class Simulation {
             return;
         }
 
-        let dt = this.isPaused ? 0 : (now - this.lastFrameTime) / 1000;
+        let dt = (now - this.lastFrameTime) / 1000;
         if (dt > 0.1) dt = 0; 
         this.lastFrameTime = now;
         this.accumulator += dt;
         
         while (this.accumulator >= this.fixedDeltaTime) {
-            // 1. Interaction logic
+            // 1. Interaction logic: Always run to allow setting velocity in pause
             if (this.isDragging && this.activeParticle) {
                 if (this.dimensions === '1D') {
                     const k = 400; const damping = 15;
@@ -1073,7 +1107,10 @@ class Simulation {
                     const ay = (force / this.activeParticle.mass);
                     this.activeParticle.vy += ay * this.fixedDeltaTime;
                     this.activeParticle.vy *= (1 - damping * this.fixedDeltaTime);
-                    this.activeParticle.y -= (this.activeParticle.vy * 40) * this.fixedDeltaTime;
+                    // Only update Y if NOT paused in 1D
+                    if (!this.isPaused) {
+                        this.activeParticle.y -= (this.activeParticle.vy * 40) * this.fixedDeltaTime;
+                    }
                 } else {
                     const sensitivity = 0.5;
                     this.activeParticle.vx = (this.mouseTargetX - this.activeParticle.x) / 10 * sensitivity;
@@ -1138,11 +1175,13 @@ class Simulation {
                         }
                     }
                 }
+                
+                // Only move time and history if not paused
+                this.globalTime += this.fixedDeltaTime;
+                this.particles.forEach(p => p.addHistory(p.x, p.y, this.globalTime));
             }
-            
-            this.particles.forEach(p => p.addHistory(p.x, p.y, this.globalTime));
 
-            if (this.isFlappy && !this.isGameOver) {
+            if (this.isFlappy && !this.isGameOver && !this.isPaused) {
                 this.spawnTimer += this.fixedDeltaTime;
                 if (this.spawnTimer > 2.0) { this.spawnObstacle(); this.spawnTimer = 0; }
                 this.obstacles.forEach(obs => {
@@ -1176,7 +1215,6 @@ class Simulation {
                 }
             }
 
-            this.globalTime += this.fixedDeltaTime;
             this.accumulator -= this.fixedDeltaTime;
         }
 
@@ -1274,6 +1312,7 @@ class Simulation {
             checkbox.checked = p.selected;
             checkbox.onclick = (e) => {
                 p.selected = e.target.checked;
+                this.initialEnergy = null; 
                 e.stopPropagation();
             };
 
@@ -1300,6 +1339,7 @@ class Simulation {
             deleteBtn.innerText = "×";
             deleteBtn.onclick = (e) => {
                 this.particles.splice(index, 1);
+                this.initialEnergy = null;
                 this.updateParticleList();
                 e.stopPropagation();
             };

@@ -83,11 +83,6 @@
                 <div class="info-box">
                     <p id="mode-desc">Kinetics: Position vs Time (1D). Vertical axis shows height, horizontal axis shows history.</p>
                 </div>
-
-                <div class="btn-group">
-                    <button id="pause-btn">Pause</button>
-                    <button id="reset-btn">Reset</button>
-                </div>
             </div>
 
             <div id="formula-overlay" class="glass hidden">
@@ -98,10 +93,19 @@
             </div>
 
             <div id="bottom-controls" class="glass">
-                <div class="speed-control">
-                    <label>Time Dilation (px/s)</label>
-                    <input type="range" id="time-scale" min="20" max="250" value="100" step="5">
-                    <span class="val-display" id="val-time-scale">100</span>
+                <div class="player-layout">
+                    <div class="player-btns">
+                        <button id="pause-btn" title="Play/Pause">Pause ⏸</button>
+                        <button id="reset-btn" title="Reset Simulation">Reset ↺</button>
+                    </div>
+                    
+                    <div class="player-divider"></div>
+
+                    <div class="speed-control">
+                        <label>Time Dilation</label>
+                        <input type="range" id="time-scale" min="20" max="250" value="100" step="5">
+                        <span class="val-display" id="val-time-scale">100</span>
+                    </div>
                 </div>
             </div>
 
@@ -131,6 +135,14 @@
                 <span id="score-val">0</span>
             </div>
             <p class="game-over hidden">Game Over! Press Reset</p>
+        </div>
+
+        <div id="fidelity-warning" class="fidelity-alert hidden">
+            <span class="icon">⚠️</span>
+            <div class="alert-content">
+                <span class="alert-title">Fidelity Compromised</span>
+                <span class="alert-desc">Numerical drift detected. Results may not be physically accurate.</span>
+            </div>
         </div>
     </div>
     <script src="app.js"></script>

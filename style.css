@@ -114,18 +114,41 @@ main {
 
 #bottom-controls {
     position: absolute;
-    bottom: 20px;
+    bottom: 25px;
     left: 50%;
     transform: translateX(-50%);
-    padding: 0.75rem 2rem;
+    padding: 0.6rem 1.5rem;
     z-index: 25;
-    min-width: 400px;
+    min-width: 550px;
+    box-shadow: 0 15px 40px rgba(0,0,0,0.6), inset 0 0 1px var(--glass-border);
+}
+
+.player-layout {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.player-btns {
+    display: flex;
+    gap: 10px;
+}
+
+.player-btns button {
+    min-width: 90px;
+}
+
+.player-divider {
+    width: 1px;
+    height: 30px;
+    background: var(--glass-border);
 }
 
 .speed-control {
     display: flex;
     align-items: center;
-    gap: 1.5rem;
+    gap: 1rem;
+    flex: 1;
 }
 
 .speed-control label {
@@ -504,3 +527,50 @@ footer p span:hover {
     background: rgba(255, 255, 255, 0.1);
 }
 
+.fidelity-alert {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: rgba(127, 29, 29, 0.4);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #fca5a5;
+    padding: 12px 20px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    z-index: 1000;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(239, 68, 68, 0.1);
+    animation: slideInRight 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    max-width: 320px;
+}
+
+@keyframes slideInRight {
+    from { transform: translateX(30px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+.fidelity-alert .icon {
+    font-size: 1.4rem;
+    filter: drop-shadow(0 0 8px #ef4444);
+}
+
+.alert-content {
+    display: flex;
+    flex-direction: column;
+}
+
+.alert-title {
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #f87171;
+}
+
+.alert-desc {
+    font-size: 0.75rem;
+    opacity: 0.8;
+    line-height: 1.3;
+}
