@@ -24,7 +24,8 @@ class Particle {
         this.id = Math.random().toString(36).substr(2, 9);
         this.selected = true;
 
-        this.history = []; // Stores {y, time}
+        this.history = []; // Stores {x, y, time}
+        this.relHistory = []; // Stores {x, y} relative to CoM
         this.updateRadius();
     }
 
@@ -54,9 +55,18 @@ class Particle {
         this.ay = newAy;
     }
 
-    addHistory(x, y, time) {
+    addHistory(x, y, time, com = null) {
         this.history.push({x, y, time});
-        if (this.history.length > 500) this.history.shift();
+        if (com) {
+            this.relHistory.push({dx: x - com.x, dy: y - com.y});
+        } else {
+            this.relHistory.push(null);
+        }
+
+        if (this.history.length > 500) {
+            this.history.shift();
+            this.relHistory.shift();
+        }
     }
 
     resetStartTime(currentTime, x, y) {
@@ -66,7 +76,7 @@ class Particle {
         // History is NOT cleared here to allow continuous graph visualization
     }
 
-    draw(ctx, globalTime, timeScale, dim = '1D') {
+    draw(ctx, globalTime, timeScale, dim = '1D', sim = null) {
         this.updateRadius();
 
         // --- Trails ---
@@ -88,17 +98,54 @@ class Particle {
         }
 
         if (dim === 'Orbital' && this.history.length > 1) {
+            const currentCoM = (sim && sim.particles.length > 0) ? sim.getCurrentCoM() : null;
+
             ctx.save();
+            ctx.lineWidth = 1.5;
+            
+            // 1. Absolute Trail (Ghostly Dotted)
             ctx.beginPath();
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = this.color;
-            ctx.globalAlpha = 0.4;
+            ctx.setLineDash([2, 6]);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
             for (let i = 0; i < this.history.length; i++) {
                 const pt = this.history[i];
                 if (i === 0) ctx.moveTo(pt.x, pt.y);
                 else ctx.lineTo(pt.x, pt.y);
             }
             ctx.stroke();
+
+            // 2. Relative Trail (Dynamic & Solid)
+            // Shows correctly when relativeFrame is on OR just as a feature
+            if (sim && sim.relativeFrame && currentCoM) {
+                ctx.beginPath();
+                ctx.setLineDash([]);
+                ctx.strokeStyle = this.color;
+                ctx.globalAlpha = 0.6;
+                for (let i = 0; i < this.relHistory.length; i++) {
+                    const rPt = this.relHistory[i];
+                    if (!rPt) continue;
+                    
+                    // Anchor relative coordinate to CURRENT CoM
+                    const drawX = currentCoM.x + rPt.dx;
+                    const drawY = currentCoM.y + rPt.dy;
+
+                    if (i === 0) ctx.moveTo(drawX, drawY);
+                    else ctx.lineTo(drawX, drawY);
+                }
+                ctx.stroke();
+            } else {
+                // Regular active trail if not in relative mode
+                ctx.beginPath();
+                ctx.setLineDash([]);
+                ctx.strokeStyle = this.color;
+                ctx.globalAlpha = 0.5;
+                for (let i = 0; i < this.history.length; i++) {
+                    const pt = this.history[i];
+                    if (i === 0) ctx.moveTo(pt.x, pt.y);
+                    else ctx.lineTo(pt.x, pt.y);
+                }
+                ctx.stroke();
+            }
             ctx.restore();
         }
 
@@ -195,9 +242,11 @@ class Simulation {
         this.comHistory = []; 
         this.pixelsPerMeter = 40;
         this.softeningEpsilon = 0.1; // Plummer Softening (meters)
-        this.initialEnergy = null; 
-        this.energyDriftThreshold = 0.01; // 1% drift limit before warning
         this.lastSelectedIds = ""; 
+        this.energyDriftThreshold = 0.01; // 1% drift limit
+        this.initialEnergy = null; 
+        this.relativeFrame = false;
+        this.followingCoM = false;
 
         this.init();
         this.animate();
@@ -225,7 +274,9 @@ class Simulation {
         this.camX = 0;
         this.camY = 0;
         this.followingCoM = false;
+        this.relativeFrame = false;
         document.getElementById('center-com')?.classList.remove('active');
+        document.getElementById('relative-frame')?.classList.remove('active');
         
         this.particles = [];
         this.comHistory = [];
@@ -407,6 +458,16 @@ class Simulation {
 
         this.initScopeControls();
 
+        // Relative Frame Toggle
+        document.getElementById('relative-frame').addEventListener('click', (e) => {
+            this.relativeFrame = !this.relativeFrame;
+            e.target.classList.toggle('active', this.relativeFrame);
+            // Optionally clear history or just let it transition? 
+            // Better to let it be, but most users expect a clean start.
+            // this.comHistory = [];
+            // this.particles.forEach(p => p.history = []);
+        });
+
         // Dimension Switcher
         document.getElementById('lab-type').addEventListener('change', (e) => {
             this.dimensions = e.target.value;
@@ -428,8 +489,9 @@ class Simulation {
             gWrap?.classList.add('hidden');
             gravityWrap?.classList.remove('hidden');
             clearBtn?.classList.add('hidden');
-            centerBtn?.classList.add('hidden');
             manager?.classList.add('hidden');
+            centerBtn?.classList.add('hidden');
+            document.getElementById('relative-frame')?.classList.add('hidden');
 
             if (this.dimensions === '2D') {
                 this.mode = 'dynamics';
@@ -445,8 +507,8 @@ class Simulation {
                 gWrap?.classList.remove('hidden');
                 gravityWrap?.classList.add('hidden');
                 clearBtn?.classList.remove('hidden');
-                centerBtn?.classList.remove('hidden');
                 manager?.classList.remove('hidden');
+                document.getElementById('relative-frame')?.classList.remove('hidden');
                 this.updateParticleList();
                 centerBtn?.classList.remove('hidden');
                 modeDesc.innerText = "Universal Gravitation Lab: Click on empty space to add particles. Drag particles to launch them. Bodies attract each other proportionally to mass/distance².";
@@ -593,17 +655,25 @@ class Simulation {
     }
 
     drawGrid(globalTime) {
-        const vSpacing = 40;
+        const vSpacing = 50;
         const hSpacing = this.timeScale;
-        const centerY = this.canvas.height / 2;
         const lockX = this.canvas.width * 0.8;
         
         const wX1 = -this.camX, wX2 = -this.camX + this.canvas.width;
         const wY1 = -this.camY, wY2 = -this.camY + this.canvas.height;
 
         this.ctx.save();
-        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
         this.ctx.beginPath();
+
+        let gridOffsetX = 0;
+        let gridOffsetY = 0;
+
+        if (this.dimensions === 'Orbital' && this.relativeFrame && this.comHistory.length > 0) {
+            const currentCoM = this.comHistory[this.comHistory.length - 1];
+            gridOffsetX = currentCoM.x % vSpacing;
+            gridOffsetY = currentCoM.y % vSpacing;
+        }
 
         if (this.dimensions === '1D') {
             for (let x = lockX - (globalTime % 1) * hSpacing; x >= wX1; x -= hSpacing) {
@@ -613,12 +683,12 @@ class Simulation {
                 this.ctx.moveTo(x, wY1); this.ctx.lineTo(x, wY2);
             }
         } else {
-            for (let x = Math.floor(wX1 / vSpacing) * vSpacing; x <= wX2; x += vSpacing) {
+            for (let x = Math.floor(wX1 / vSpacing) * vSpacing + gridOffsetX; x <= wX2; x += vSpacing) {
                 this.ctx.moveTo(x, wY1); this.ctx.lineTo(x, wY2);
             }
         }
 
-        for (let y = Math.floor(wY1 / vSpacing) * vSpacing; y <= wY2; y += vSpacing) {
+        for (let y = Math.floor(wY1 / vSpacing) * vSpacing + gridOffsetY; y <= wY2; y += vSpacing) {
             this.ctx.moveTo(wX1, y); this.ctx.lineTo(wX2, y);
         }
         this.ctx.stroke();
@@ -940,6 +1010,8 @@ class Simulation {
     }
 
     updateFormula() {
+        const textEl = document.getElementById('formula-text');
+        if (!textEl) return;
         const p = this.particles[0];
         if (!p) return;
         const v = p.vy.toFixed(1);
@@ -1183,42 +1255,38 @@ class Simulation {
                     }
                 }
                 
-                // Only move time and history if not paused
+                // 3. Telemetry and History Synchronization
+                const currentCoM = this.getCurrentCoM();
                 this.globalTime += this.fixedDeltaTime;
-                this.particles.forEach(p => p.addHistory(p.x, p.y, this.globalTime));
-            }
+                this.particles.forEach(p => p.addHistory(p.x, p.y, this.globalTime, currentCoM));
+                
+                if (this.dimensions === 'Orbital' && currentCoM) {
+                    this.comHistory.push(currentCoM);
+                    if (this.comHistory.length > 500) this.comHistory.shift();
+                }
 
-            if (this.isFlappy && !this.isGameOver && !this.isPaused) {
-                this.spawnTimer += this.fixedDeltaTime;
-                if (this.spawnTimer > 2.0) { this.spawnObstacle(); this.spawnTimer = 0; }
-                this.obstacles.forEach(obs => {
-                    obs.x -= 3;
-                    this.particles.forEach(p => {
-                        if (!obs.passed && obs.x + obs.width < p.x) {
-                            obs.passed = true;
-                            this.score++;
-                            document.getElementById('score-val').innerText = this.score;
-                        }
-                        if (p.x + p.radius > obs.x && p.x - p.radius < obs.x + obs.width) {
-                            if (p.y - p.radius < obs.topHeight || p.y + p.radius > obs.topHeight + obs.gapSize) {
-                                this.isGameOver = true;
-                                document.querySelector('.game-over').classList.remove('hidden');
+                // 4. Game Logic (Flappy Mode)
+                if (this.isFlappy && !this.isGameOver && !this.isPaused) {
+                    this.spawnTimer += this.fixedDeltaTime;
+                    if (this.spawnTimer > 2.0) { this.spawnObstacle(); this.spawnTimer = 0; }
+                    this.obstacles.forEach(obs => {
+                        obs.x -= 3;
+                        this.particles.forEach(p => {
+                            if (!obs.passed && obs.x + obs.width < p.x) {
+                                obs.passed = true;
+                                this.score++;
+                                const scoreVal = document.getElementById('score-val');
+                                if (scoreVal) scoreVal.innerText = this.score;
                             }
-                        }
+                            if (p.x + p.radius > obs.x && p.x - p.radius < obs.x + obs.width) {
+                                if (p.y - p.radius < obs.topHeight || p.y + p.radius > obs.topHeight + obs.gapSize) {
+                                    this.isGameOver = true;
+                                    document.querySelector('.game-over')?.classList.remove('hidden');
+                                }
+                            }
+                        });
                     });
-                });
-                this.obstacles = this.obstacles.filter(obs => obs.x + obs.width > -50);
-            }
-
-            if (this.dimensions === 'Orbital' && !this.isPaused) {
-                const selected = this.particles.filter(p => p.selected);
-                if (selected.length > 0) {
-                    let totalM = 0; let sumX = 0; let sumY = 0;
-                    selected.forEach(p => {
-                        totalM += p.mass; sumX += p.mass * p.x; sumY += p.mass * p.y;
-                    });
-                    this.comHistory.push({x: sumX / totalM, y: sumY / totalM});
-                    if (this.comHistory.length > 400) this.comHistory.shift();
+                    this.obstacles = this.obstacles.filter(obs => obs.x + obs.width > -50);
                 }
             }
 
@@ -1232,7 +1300,7 @@ class Simulation {
         this.ctx.translate(this.camX, this.camY);
         this.drawAxes(this.globalTime);
         if (this.isFlappy) this.drawObstacles();
-        this.particles.forEach(p => p.draw(this.ctx, this.globalTime, this.timeScale, this.dimensions));
+        this.particles.forEach(p => p.draw(this.ctx, this.globalTime, this.timeScale, this.dimensions, this));
         if (this.isPaused) this.drawTheoreticalCurve();
         this.ctx.restore();
 
@@ -1318,6 +1386,8 @@ class Simulation {
                 p.selected = !p.selected;
                 item.classList.toggle('selected', p.selected);
                 this.initialEnergy = null; 
+                this.particles.forEach(pt => { pt.history = []; pt.relHistory = []; });
+                this.comHistory = [];
             };
 
             const dot = document.createElement('div');
@@ -1344,6 +1414,8 @@ class Simulation {
             deleteBtn.onclick = (e) => {
                 this.particles.splice(index, 1);
                 this.initialEnergy = null;
+                this.particles.forEach(pt => { pt.history = []; pt.relHistory = []; });
+                this.comHistory = [];
                 this.updateParticleList();
                 e.stopPropagation();
             };
@@ -1358,21 +1430,24 @@ class Simulation {
         });
     }
 
-    updateStickyCenter() {
+    getCurrentCoM() {
         const selected = this.particles.filter(p => p.selected);
-        if (selected.length === 0) return;
-
+        if (selected.length === 0) return null;
         let totalM = 0; let sumX = 0; let sumY = 0;
         selected.forEach(p => {
             totalM += p.mass;
             sumX += p.mass * p.x;
             sumY += p.mass * p.y;
         });
-        const comWorldX = sumX / totalM;
-        const comWorldY = sumY / totalM;
+        return { x: sumX / totalM, y: sumY / totalM };
+    }
 
-        this.camX = (this.canvas.width / 2) - comWorldX;
-        this.camY = (this.canvas.height / 2) - comWorldY;
+    updateStickyCenter() {
+        const com = this.getCurrentCoM();
+        if (!com) return;
+
+        this.camX = (this.canvas.width / 2) - com.x;
+        this.camY = (this.canvas.height / 2) - com.y;
     }
 
     calculateAccelerations() {
