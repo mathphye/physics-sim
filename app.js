@@ -312,11 +312,6 @@ class Simulation {
         }
 
         document.getElementById('mass').addEventListener('input', (e) => {
-            const p = this.activeParticle || this.particles[0];
-            if (p) {
-                p.mass = parseFloat(e.target.value);
-                p.updateRadius();
-            }
             updateVal('mass', e.target.value);
         });
 
@@ -404,6 +399,13 @@ class Simulation {
         document.getElementById('easter-egg-btn').addEventListener('click', () => {
             this.toggleFlappy();
         });
+
+        document.getElementById('sidebar-toggle').addEventListener('click', () => {
+            document.getElementById('controls').classList.toggle('collapsed');
+        });
+
+
+        this.initScopeControls();
 
         // Dimension Switcher
         document.getElementById('lab-type').addEventListener('change', (e) => {
@@ -1406,6 +1408,74 @@ class Simulation {
             }
         }
         return accels;
+    }
+
+    initScopeControls() {
+        const scope = document.getElementById('ui-overlay');
+        const header = document.getElementById('scope-header');
+        const resizer = document.getElementById('scope-resizer');
+        const toggle = document.getElementById('scope-toggle');
+
+        let isWindowDragging = false;
+        let isResizing = false;
+        let startX, startY, startW, startH, startL, startT;
+
+        // Toggle Minimize
+        toggle.addEventListener('click', (e) => {
+            scope.classList.toggle('minimized');
+            toggle.innerText = scope.classList.contains('minimized') ? "▢" : "_";
+            e.stopPropagation();
+        });
+
+        // Dragging
+        header.addEventListener('mousedown', (e) => {
+            if (e.target === toggle) return;
+            isWindowDragging = true;
+            const rect = scope.getBoundingClientRect();
+            startX = e.clientX;
+            startY = e.clientY;
+            startL = rect.left;
+            startT = rect.top;
+            
+            // Switch to top/left for free movement
+            scope.style.bottom = 'auto';
+            scope.style.right = 'auto';
+            scope.style.left = startL + 'px';
+            scope.style.top = startT + 'px';
+            
+            document.body.style.cursor = 'move';
+        });
+
+        // Resizing
+        resizer.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            startW = scope.offsetWidth;
+            startH = scope.offsetHeight;
+            document.body.style.cursor = 'nwse-resize';
+            e.preventDefault();
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (isWindowDragging) {
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                scope.style.left = (startL + dx) + 'px';
+                scope.style.top = (startT + dy) + 'px';
+            } else if (isResizing) {
+                const dw = e.clientX - startX;
+                const dh = e.clientY - startY;
+                scope.style.width = (startW + dw) + 'px';
+                scope.style.height = (startH + dh) + 'px';
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
+            isWindowDragging = false;
+            isResizing = false;
+            document.body.style.cursor = 'default';
+        });
     }
 }
 

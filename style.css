@@ -193,26 +193,164 @@ main {
 
 #ui-overlay {
     position: absolute;
-    bottom: 20px;
-    right: 20px;
-    padding: 1rem 1.5rem;
-    z-index: 20;
+    bottom: 25px;
+    right: 25px;
+    padding: 0;
+    z-index: 100;
+    pointer-events: auto;
+    overflow: hidden;
+    border-radius: 12px;
+    background: #060a0a;
+    border: 2px solid #1a2e2e;
+    box-shadow: 
+        0 20px 50px rgba(0,0,0,0.8),
+        inset 0 0 20px rgba(16, 185, 129, 0.1);
+    min-width: 260px;
+    min-height: 40px;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+}
+
+#ui-overlay.minimized {
+    min-height: 0;
+    height: auto !important;
+}
+
+#ui-overlay.minimized #scope-content,
+#ui-overlay.minimized #scope-resizer {
+    display: none;
+}
+
+#ui-overlay::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(
+        0deg,
+        rgba(0, 0, 0, 0.15) 0px,
+        rgba(0, 0, 0, 0.15) 1px,
+        transparent 1px,
+        transparent 2px
+    );
     pointer-events: none;
+    z-index: 10;
+}
+
+.scope-header {
+    background: #1a2e2e;
+    color: #10b981;
+    font-size: 0.6rem;
+    padding: 8px 12px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-weight: 800;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(16, 185, 129, 0.2);
+    cursor: move;
+    user-select: none;
+}
+
+.scope-ctrl-btn {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    color: #10b981;
+    border-radius: 4px;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: all 0.2s ease;
+}
+
+.scope-ctrl-btn:hover {
+    background: #10b981;
+    color: #1a2e2e;
+}
+
+.scope-resizer {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 15px;
+    height: 15px;
+    cursor: nwse-resize;
+    background: linear-gradient(135deg, transparent 50%, rgba(16, 185, 129, 0.3) 50%);
+    border-radius: 0 0 10px 0;
+}
+
+.scope-header::after {
+    content: "LIVE";
+    color: #ef4444;
+    animation: pulse 1s infinite;
+}
+
+.scope-content {
+    padding: 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+    position: relative;
 }
 
 #controls {
     position: absolute;
-    top: 20px;
-    left: 20px;
-    width: 280px;
-    padding: 1.5rem;
-    z-index: 20;
+    top: 0;
+    left: 0;
+    width: 300px;
+    height: 100%;
+    padding: 6rem 1.5rem 2rem 1.5rem;
+    z-index: 40;
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 1.5rem;
+    border-radius: 0 24px 24px 0;
+    transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 10px 0 40px rgba(0,0,0,0.5);
+}
+
+#controls.collapsed {
+    transform: translateX(-100%);
+}
+
+.sidebar-toggle {
+    position: absolute;
+    top: 50%;
+    right: -30px;
+    width: 30px;
+    height: 60px;
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    border-left: none;
+    border-radius: 0 12px 12px 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent-color);
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    z-index: 41;
+}
+
+.sidebar-toggle:hover {
+    background: var(--accent-color);
+    color: white;
+    width: 35px;
+    right: -35px;
+}
+
+#toggle-icon {
+    transition: transform 0.5s ease;
+}
+
+#controls.collapsed #toggle-icon {
+    transform: rotate(180deg);
 }
 
 .btn-group {
@@ -338,18 +476,34 @@ button#pause-btn.active {
 
 .stat {
     display: flex;
-    justify-content: space-between;
-    gap: 1rem;
-    font-size: 0.9rem;
+    flex-direction: column;
+    gap: 4px;
 }
 
 .label {
-    color: var(--text-secondary);
+    color: rgba(16, 185, 129, 0.5);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 600;
+    font-family: monospace;
 }
 
 .value {
-    color: var(--accent-color);
-    font-weight: 600;
+    color: #10b981;
+    font-weight: 400;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 1.1rem;
+    text-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+    display: flex;
+    align-items: baseline;
+}
+
+.value::before {
+    content: "> ";
+    opacity: 0.4;
+    font-size: 0.8rem;
+    margin-right: 5px;
 }
 
 .instructions {
