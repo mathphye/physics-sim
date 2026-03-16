@@ -1159,11 +1159,16 @@ class Simulation {
                             p.updatePositionVerlet(this.fixedDeltaTime);
                             p.updateVelocityVerlet(this.fixedDeltaTime, 0, -this.gravity);
                             const limitY = this.dimensions === '2D' ? this.canvas.height : centerY;
-                            if (p.y >= limitY) {
-                                p.y = limitY; p.vy = Math.abs(p.vy) * 0.8; p.ay = 0;
-                            } else if (p.y < 0) {
-                                p.vy = -Math.abs(p.vy) * 0.8; p.y = 0;
+                            
+                            // Only bounce if NOT in Flappy mode
+                            if (!this.isFlappy) {
+                                if (p.y >= limitY) {
+                                    p.y = limitY; p.vy = Math.abs(p.vy) * 0.8; p.ay = 0;
+                                } else if (p.y < 0) {
+                                    p.vy = -Math.abs(p.vy) * 0.8; p.y = 0;
+                                }
                             }
+
                             if (this.dimensions === '2D') {
                                 if (p.x >= this.canvas.width) { p.vx = -Math.abs(p.vx) * 0.8; p.x = this.canvas.width; }
                                 else if (p.x <= 0) { p.vx = Math.abs(p.vx) * 0.8; p.x = 0; }

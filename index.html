@@ -17,7 +17,10 @@
 <body>
     <div id="app-container">
         <header>
-            <h1>Physics<span>Sim</span></h1>
+            <div class="header-main">
+                <h1>Physics<span>Sim</span></h1>
+                <p id="mode-desc">Kinetics: Position vs Time (1D). Vertical axis shows height, horizontal axis shows history.</p>
+            </div>
             <div class="lab-selector">
                 <select id="lab-type">
                     <option value="1D" selected>1D Motion Lab</option>
@@ -80,9 +83,8 @@
                     </div>
                 </div>
 
-                <div class="info-box">
-                    <p id="mode-desc">Kinetics: Position vs Time (1D). Vertical axis shows height, horizontal axis shows history.</p>
                 </div>
+            </div>
             </div>
 
             <div id="formula-overlay" class="glass hidden">
