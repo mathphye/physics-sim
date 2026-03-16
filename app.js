@@ -149,38 +149,38 @@ class Particle {
             ctx.restore();
         }
 
-        // --- Main Body (Premium Aesthetic) ---
+        // --- Main Body (Cartoon Illustration Style) ---
         ctx.save();
         
-        // Outer atmospheric glow
-        ctx.shadowBlur = this.radius * 1.5;
-        ctx.shadowColor = this.color;
-        
-        // Polished Rim
+        // 1. Thick "Inked" Outline
         ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius + 2, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-        ctx.lineWidth = 2;
+        ctx.arc(this.x, this.y, this.radius + 1, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)'; // High contrast border
+        ctx.lineWidth = 4;
         ctx.stroke();
-
-        // High-end Radial Gradient (Sphere effect)
-        const grad = ctx.createRadialGradient(
-            this.x - this.radius*0.3, this.y - this.radius*0.3, this.radius * 0.1,
-            this.x, this.y, this.radius
-        );
-        grad.addColorStop(0, '#ffffff'); 
-        grad.addColorStop(0.3, this.color);
-        grad.addColorStop(1, 'rgba(0,0,0,0.6)');
 
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-        ctx.fillStyle = grad;
+        ctx.strokeStyle = '#000000'; // Inner ink line
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // 2. Cel-Shaded Fill
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+
+        // 3. Stylized "Physics Illustration" Highlight (Sheen)
+        ctx.beginPath();
+        ctx.arc(this.x - this.radius * 0.35, this.y - this.radius * 0.35, this.radius * 0.25, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
         ctx.fill();
 
         ctx.restore();
 
-        // Velocity Vector
-        this.drawVector(ctx, this.x, this.y, this.vx * 40, -this.vy * 40, this.color);
+        // Velocity Vector (Bold Illustration Style)
+        this.drawVector(ctx, this.x, this.y, this.vx * 40, -this.vy * 40, '#ffffff');
     }
 
     drawVector(ctx, x, y, vx, vy, color) {
@@ -348,6 +348,7 @@ class Simulation {
                 if (p) {
                     p.vy = parseFloat(e.target.value);
                     if (this.mode === 'kinetics') p.resetStartTime(this.globalTime, p.x, p.y);
+                    if (this.isPaused) this.updateFormula();
                 }
                 updateVal('vy', e.target.value);
             });
@@ -357,19 +358,34 @@ class Simulation {
         if (velXInput) {
             velXInput.addEventListener('input', (e) => {
                 const p = this.activeParticle || this.particles[0];
-                if (p) p.vx = parseFloat(e.target.value);
+                if (p) {
+                    p.vx = parseFloat(e.target.value);
+                    if (this.isPaused) this.updateFormula();
+                }
                 updateVal('vx', e.target.value);
             });
         }
 
         document.getElementById('mass').addEventListener('input', (e) => {
+            const m = parseFloat(e.target.value);
             updateVal('mass', e.target.value);
+
+            // In 1D/2D, we update the current particle immediately.
+            // In Orbital, we only affect the "next" particle spawned.
+            if (this.dimensions !== 'Orbital') {
+                const p = this.activeParticle || this.particles[0];
+                if (p) {
+                    p.mass = m;
+                    p.updateRadius();
+                }
+            }
         });
 
         document.getElementById('gravity').addEventListener('input', (e) => {
             this.gravity = parseFloat(e.target.value);
             this.initialEnergy = null;
             updateVal('gravity', e.target.value);
+            if (this.isPaused) this.updateFormula();
         });
 
         const timeScaleInput = document.getElementById('time-scale');
@@ -655,7 +671,7 @@ class Simulation {
     }
 
     drawGrid(globalTime) {
-        const vSpacing = 50;
+        const vSpacing = this.pixelsPerMeter || 40;
         const hSpacing = this.timeScale;
         const lockX = this.canvas.width * 0.8;
         
@@ -1014,17 +1030,20 @@ class Simulation {
         if (!textEl) return;
         const p = this.particles[0];
         if (!p) return;
+        const isDynamics = this.mode === 'dynamics';
         const v = p.vy.toFixed(1);
         const zeroY = this.dimensions === '2D' ? this.canvas.height - 50 : this.canvas.height / 2;
-        const y0 = ((zeroY - p.startY) / 40).toFixed(1);
+        
+        // Local Analysis: We treat the current point as Origin (y0 = 0)
+        // to match the visual "Analysis Origin" axes.
+        const y0 = "0.0";
         const g = this.gravity.toFixed(2);
 
         let latex = "";
         if (this.mode === 'kinetics') {
-            // y(t) = y_0 + v \cdot t
             latex = `y(t) = ${y0} + (${v}) \\cdot t`;
         } else {
-            // y(t) = y_0 + v_0 \cdot t + \frac{1}{2} a \cdot t^2
+            // y(t) = y_i + v_y * t + 0.5 * a * t^2
             latex = `y(t) = ${y0} + (${v}) \\cdot t + \\frac{1}{2}(${-g}) \\cdot t^2`;
         }
 
@@ -1054,6 +1073,9 @@ class Simulation {
         if (this.dimensions === '1D') {
             const p = this.particles[0];
             if (!p) return;
+            
+            this.ctx.beginPath();
+            let firstPoint = true;
             for (let t = currentT - 4; t <= currentT + 1; t += 0.05) {
                 let y;
                 if (this.mode === 'kinetics') {
@@ -1068,18 +1090,45 @@ class Simulation {
                 }
                 const x = p.x - (currentT - t) * this.timeScale;
                 if (x >= 0 && x <= this.canvas.width) {
-                    if (t === currentT - 4) this.ctx.moveTo(x, y);
-                    else this.ctx.lineTo(x, y);
+                    if (firstPoint) {
+                        this.ctx.moveTo(x, y);
+                        firstPoint = false;
+                    } else {
+                        this.ctx.lineTo(x, y);
+                    }
                 }
             }
+            this.ctx.stroke();
         } else if (this.dimensions === '2D') {
             // 2D Spatial Trajectory
             const p = this.particles[0];
             if (!p) return;
+
+            // --- LOCAL ANALYSIS AXES ---
+            this.ctx.save();
+            this.ctx.strokeStyle = 'rgba(251, 191, 36, 0.3)';
+            this.ctx.lineWidth = 1;
+            this.ctx.setLineDash([5, 5]);
+            this.ctx.beginPath();
+            // Vertical local X=0
+            this.ctx.moveTo(p.x, 0); this.ctx.lineTo(p.x, this.canvas.height);
+            // Horizontal local Y=0 of the analysis
+            this.ctx.moveTo(0, p.y); this.ctx.lineTo(this.canvas.width, p.y);
+            this.ctx.stroke();
+            
+            // Analysis Origin Label
+            this.ctx.fillStyle = '#fbbf24';
+            this.ctx.font = '10px Outfit';
+            this.ctx.globalAlpha = 0.8;
+            this.ctx.fillText('Analysis Origin (t=0)', p.x + 8, p.y - 8);
+            this.ctx.restore();
+
             const vNowX = p.vx;
             const vNowY = p.vy;
             const aDown = -this.gravity;
 
+            this.ctx.beginPath();
+            let firstPoint = true;
             for (let dt = -2; dt <= 5; dt += 0.05) {
                 const dx = (vNowX * dt) * pixelsPerMeter;
                 const dy = (vNowY * dt + 0.5 * (this.mode === 'kinetics' ? 0 : aDown) * dt * dt) * pixelsPerMeter;
@@ -1087,10 +1136,15 @@ class Simulation {
                 const y = p.y - dy;
 
                 if (x >= 0 && x <= this.canvas.width && y >= 0 && y <= this.canvas.height) {
-                    if (dt === -2) this.ctx.moveTo(x, y);
-                    else this.ctx.lineTo(x, y);
+                    if (firstPoint) {
+                        this.ctx.moveTo(x, y);
+                        firstPoint = false;
+                    } else {
+                        this.ctx.lineTo(x, y);
+                    }
                 }
             }
+            this.ctx.stroke();
         }
         this.ctx.stroke();
         this.ctx.restore();
@@ -1186,14 +1240,16 @@ class Simulation {
                         this.activeParticle.y -= (this.activeParticle.vy * 40) * this.fixedDeltaTime;
                     }
                 } else {
-                    const sensitivity = 0.5;
-                    this.activeParticle.vx = (this.mouseTargetX - this.activeParticle.x) / 10 * sensitivity;
-                    this.activeParticle.vy = -(this.mouseTargetY - this.activeParticle.y) / 10 * sensitivity;
+                    // Velocity Magnitude: 1 Grid Square (pixelsPerMeter) = 1 m/s
+                    this.activeParticle.vx = (this.mouseTargetX - this.activeParticle.x) / this.pixelsPerMeter;
+                    this.activeParticle.vy = -(this.mouseTargetY - this.activeParticle.y) / this.pixelsPerMeter;
                 }
                 const valVy = document.getElementById('val-vy');
                 if (valVy) valVy.innerText = this.activeParticle.vy.toFixed(1);
                 const valVx = document.getElementById('val-vx');
                 if (valVx) valVx.innerText = this.activeParticle.vx.toFixed(1);
+
+                if (this.isPaused) this.updateFormula();
             }
 
             // 2. World Physics logic
@@ -1221,7 +1277,7 @@ class Simulation {
                         if (this.mode === 'kinetics') {
                             const elapsedSinceStart = this.globalTime - p.startTime;
                             p.updateKinetic(elapsedSinceStart, this.dimensions); 
-                            const limitY = this.dimensions === '2D' ? this.canvas.height : centerY;
+                            const limitY = this.dimensions === '2D' ? this.canvas.height - 50 : centerY;
                             if (p.y >= limitY) {
                                 p.vy = Math.abs(p.vy); p.y = limitY;
                                 p.resetStartTime(this.globalTime, p.x, p.y);
@@ -1232,8 +1288,8 @@ class Simulation {
                         } else {
                             p.updatePositionVerlet(this.fixedDeltaTime);
                             p.updateVelocityVerlet(this.fixedDeltaTime, 0, -this.gravity);
-                            const limitY = this.dimensions === '2D' ? this.canvas.height : centerY;
-                            
+                            const limitY = this.dimensions === '2D' ? this.canvas.height - 50 : centerY;
+                             
                             // Only bounce if NOT in Flappy mode
                             if (!this.isFlappy) {
                                 if (p.y >= limitY) {
