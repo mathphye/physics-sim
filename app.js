@@ -1312,15 +1312,12 @@ class Simulation {
 
         this.particles.forEach((p, index) => {
             const item = document.createElement('div');
-            item.className = 'particle-item';
+            item.className = 'particle-item' + (p.selected ? ' selected' : '');
             
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.checked = p.selected;
-            checkbox.onclick = (e) => {
-                p.selected = e.target.checked;
+            item.onclick = () => {
+                p.selected = !p.selected;
+                item.classList.toggle('selected', p.selected);
                 this.initialEnergy = null; 
-                e.stopPropagation();
             };
 
             const dot = document.createElement('div');
@@ -1351,7 +1348,6 @@ class Simulation {
                 e.stopPropagation();
             };
 
-            item.appendChild(checkbox);
             item.appendChild(dot);
             item.appendChild(name);
             actions.appendChild(centerBtn);

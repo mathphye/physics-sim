@@ -662,6 +662,7 @@ footer p span:hover {
     font-size: 0.8rem;
     transition: all 0.2s ease;
     border: 1px solid transparent;
+    cursor: pointer;
 }
 
 .particle-item:hover {
@@ -669,9 +670,10 @@ footer p span:hover {
     border-color: var(--glass-border);
 }
 
-.particle-item input[type="checkbox"] {
-    accent-color: var(--accent-color);
-    cursor: pointer;
+.particle-item.selected {
+    background: rgba(16, 185, 129, 0.1);
+    border-color: var(--accent-color);
+    box-shadow: inset 0 0 10px rgba(16, 185, 129, 0.1);
 }
 
 .particle-item .pt-color-dot {
